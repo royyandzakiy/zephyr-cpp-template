@@ -30,10 +30,14 @@ the new project just attaches to the image you already have. No re-download.
 Build the shared image once (takes a while — it pulls the whole SDK):
 
 ```powershell
-./scripts/build-image.ps1                  # latest SDK (main branch)
-# or pin a release for reproducibility:
-./scripts/build-image.ps1 -NcsRev v2.9.0
+./scripts/build-image.ps1                  # NCS v3.3.0 (matches the reference project)
+# or track the bleeding edge:
+./scripts/build-image.ps1 -NcsRev main
 ```
+
+> The default pins **NCS v3.3.0** — the same release `balancer-robot-fw` is known
+> to build with, so the C++23 + STL setup is guaranteed to work. Bump it when you're
+> ready to move.
 
 This produces the `ncs-workspace:latest` image. Every project from now on reuses it.
 
@@ -90,7 +94,29 @@ toolchain other than ARM, rebuild the image with
 |---|---|
 | `Dockerfile` | Builds the shared SDK workspace image (run once) |
 | `.devcontainer/devcontainer.json` | VS Code attaches to the image + Nordic extensions |
-| `CMakeLists.txt`, `prj.conf`, `src/main.cpp` | The bare C++ blinky app |
+| `CMakeLists.txt`, `prj.conf`, `src/main.cpp` | The bare C++23 blinky app |
+| `sample.yaml` | Twister build test (`west twister -T .`) |
+| `debug-overlay.conf` | Extra debug Kconfig (`-DEXTRA_CONF_FILE=...`) |
+| `.clang-format`, `.clang-tidy`, `.cmake-format.yaml` | Formatting/lint config (from the reference) |
+| `.vscode/settings.json` | C++23 IntelliSense + clang-tidy |
 | `scripts/build-image.ps1` | Build/refresh the shared image |
 | `scripts/shell.ps1` | Interactive shell with this project mounted |
 | `scripts/build.ps1` | One-shot headless build |
+
+## C++ Kconfig notes
+
+The C++ support in `prj.conf` mirrors the reference project — the non-obvious part
+of getting C++ to build on Zephyr:
+
+```
+CONFIG_CPP=y
+CONFIG_STD_CPP2B=y        # C++23
+CONFIG_GLIBCXX_LIBCPP=y   # full libstdc++ → std::array/string_view/variant/...
+CONFIG_CPP_RTTI=y
+CONFIG_NEWLIB_LIBC=y      # libc that backs the C++ runtime/heap
+CONFIG_HEAP_MEM_POOL_SIZE=8192
+```
+
+No `boards/` overlay is needed for the bare nRF5340 DK build — `led0` comes from
+the in-tree board devicetree. Add a `boards/` folder only when you need pin/peripheral
+overlays for a custom board.

@@ -1,10 +1,10 @@
 # Build the shared nRF Connect SDK workspace image ONCE.
 # Re-run only when you want to move to a newer SDK revision.
 #
-#   ./scripts/build-image.ps1                  # latest (main)
-#   ./scripts/build-image.ps1 -NcsRev v2.9.0   # pinned release
+#   ./scripts/build-image.ps1                  # v3.3.0 (matches reference)
+#   ./scripts/build-image.ps1 -NcsRev main     # bleeding edge
 param(
-    [string]$NcsRev = "main",
+    [string]$NcsRev = "v3.3.0",
     [string]$Tag    = "ncs-workspace:latest"
 )
 

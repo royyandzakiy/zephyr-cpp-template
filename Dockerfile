@@ -17,10 +17,11 @@
 
 FROM ubuntu:24.04
 
-# Which nRF Connect SDK revision to check out. Defaults to the tip of main
-# ("latest"). For reproducible builds, pin a release tag instead:
-#   docker build --build-arg NCS_REV=v2.9.0 -t ncs-workspace:2.9.0 .
-ARG NCS_REV=main
+# Which nRF Connect SDK revision to check out. Defaults to v3.3.0 — the same
+# known-good release the reference project (balancer-robot-fw) builds with, so
+# C++23 + full STL is guaranteed to work. For the bleeding edge use:
+#   docker build --build-arg NCS_REV=main -t ncs-workspace:latest .
+ARG NCS_REV=v3.3.0
 
 # Only the ARM toolchain is installed by default (nRF5340 is Cortex-M33).
 # Set to "all" to cover every architecture.

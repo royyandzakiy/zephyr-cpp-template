@@ -1,8 +1,10 @@
-# Zephyr / west build output
-build/
-build-*/
+# editors
+*.swp
+*~
+
+# build
+/build*/
 twister-out/
 
-# Editor / tooling
-.vscode/
-*.user
+# signing key - private key must never be committed
+signing_key.pem

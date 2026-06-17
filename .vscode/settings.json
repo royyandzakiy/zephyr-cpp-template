@@ -1,0 +1,29 @@
+{
+	// --- Standard ---
+	"C_Cpp.default.cppStandard": "c++23",
+	// --- Code Analysis ---
+	"C_Cpp.codeAnalysis.clangTidy.enabled": true,
+	"C_Cpp.codeAnalysis.clangTidy.path": "clang-tidy",
+	"C_Cpp.codeAnalysis.clangTidy.buildPath": "${workspaceFolder}/build",
+	"C_Cpp.codeAnalysis.runAutomatically": true,
+	// --- Formatting ---
+	"editor.formatOnSave": true,
+	"editor.insertSpaces": false,
+	"editor.tabSize": 4,
+	"editor.detectIndentation": false,
+	"clang-format.style": "file",
+	// --- Include Associations (standard C++ headers) ---
+	"files.associations": {
+		"*.defaults": "kconfig",
+		"algorithm": "c",
+		"iterator": "c",
+		"xmemory": "c",
+		"xtree": "c",
+		"xutility": "c"
+	},
+	// In the dev container the SDK lives at /workspace; IntelliSense uses the
+	// generated compile_commands.json once you've built once.
+	"C_Cpp.default.compileCommands": [
+		"build/${workspaceFolderBasename}/compile_commands.json"
+	]
+}

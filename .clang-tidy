@@ -1,0 +1,5 @@
+---
+Checks: 'bugprone-*,modernize-*,performance-*,cppcoreguidelines-*,-cppcoreguidelines-pro-bounds-array-to-pointer-decay'
+WarningsAsErrors: '*'
+HeaderFilterRegex: 'src/.*|include/.*'
+...
