@@ -68,18 +68,24 @@ RUN mkdir -p ${NCS_INSTALL_DIR} \
 # every SDK in the volume. It is run on each container start (postStartCommand).
 COPY <<'EOF' /usr/local/bin/ncs-register-sdks
 #!/usr/bin/env bash
+# Register EVERY west workspace in the install dir (official NCS *and* custom
+# SDKs with any folder name) in the CMake user package registry, so the nRF
+# Connect extension discovers them. A dir qualifies if it contains
+# zephyr/share/zephyr-package/cmake (i.e. it's a real Zephyr/NCS workspace).
 set -eu
 NCS_DIR="${NCS_INSTALL_DIR:-/root/ncs}"
 REG="${HOME}/.cmake/packages/Zephyr"
 mkdir -p "$REG"
 count=0
-for d in "$NCS_DIR"/v*/; do
-	[ -d "$d" ] || continue
+for d in "$NCS_DIR"/*/; do
+	name="$(basename "$d")"
+	# skip nrfutil's support folders, not SDKs
+	case "$name" in toolchains|downloads|tmp) continue ;; esac
 	pkg="${d}zephyr/share/zephyr-package/cmake"
 	[ -d "$pkg" ] || continue
 	h="$(printf '%s' "$pkg" | md5sum | cut -d' ' -f1)"
 	printf '%s' "$pkg" > "${REG}/${h}"
-	echo "registered $(basename "$d") -> $pkg"
+	echo "registered ${name} -> ${pkg}"
 	count=$((count + 1))
 done
 echo "ncs-register-sdks: registered ${count} SDK(s) for the nRF Connect extension"
