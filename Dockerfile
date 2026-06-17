@@ -5,7 +5,7 @@
 #
 # This image contains ONLY the host tools + nrfutil. It does NOT contain any
 # SDK. The actual nRF Connect SDK versions + their matching toolchains are
-# installed by nrfutil into a Docker *volume* mounted at /opt/nordic/ncs, so:
+# installed by nrfutil into a Docker *volume* mounted at /root/ncs, so:
 #
 #   * the image stays small and rarely changes
 #   * many SDK versions live side-by-side in the volume (like your C:\ncs)
@@ -15,7 +15,7 @@
 # The layout produced in the volume mirrors a native Nordic install, which is
 # exactly what the nRF Connect for VS Code extension auto-discovers:
 #
-#   /opt/nordic/ncs/
+#   /root/ncs/
 #   ├── toolchains/<bundle>/      (one toolchain per version)
 #   ├── v3.3.0/                   (full west workspace)
 #   └── v3.2.x/ ...
@@ -29,7 +29,12 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # Where nrfutil installs SDKs + toolchains. This path is the Docker volume
 # mount point; the extension is pointed here too.
-ENV NCS_INSTALL_DIR=/opt/nordic/ncs
+# IMPORTANT: this must match the nRF Connect VS Code extension's own SDK install
+# directory, which defaults to ~/ncs (= /root/ncs for the root user). The
+# extension ignores nrfutil's configured install-dir and uses this path, so we
+# align everything here: the volume is mounted at /root/ncs, the scripts install
+# here, and the extension installs here too — one shared store, no copying.
+ENV NCS_INSTALL_DIR=/root/ncs
 
 # --- Minimal host dependencies ----------------------------------------------
 # nrfutil's toolchain bundles ship their own cmake/ninja/python/west, so we

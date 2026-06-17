@@ -19,11 +19,11 @@ $dest = "/workspaces/$name"
 $p    = if ($Pristine) { "-p always" } else { "" }
 
 # Launch sets up the toolchain env; ZEPHYR_BASE selects which SDK to build against.
-$inner = "export ZEPHYR_BASE=/opt/nordic/ncs/$NcsRev/zephyr; " +
+$inner = "export ZEPHYR_BASE=/root/ncs/$NcsRev/zephyr; " +
          "west build -b $Board $dest --build-dir $dest/build $p"
 
 docker run --rm `
-    -v "${Volume}:/opt/nordic/ncs" `
+    -v "${Volume}:/root/ncs" `
     -v "${root}:${dest}" `
     $Image bash -lc "nrfutil toolchain-manager launch --ncs-version $NcsRev -- bash -c '$inner'"
 

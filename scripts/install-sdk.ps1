@@ -18,12 +18,12 @@ param(
 $ErrorActionPreference = "Stop"
 
 if ($List) {
-    docker run --rm -v "${Volume}:/opt/nordic/ncs" $Image bash -lc `
+    docker run --rm -v "${Volume}:/root/ncs" $Image bash -lc `
         "echo '=== available ==='; nrfutil sdk-manager search; echo; echo '=== installed ==='; nrfutil sdk-manager list"
     return
 }
 
-docker run --rm -v "${Volume}:/opt/nordic/ncs" $Image bash -lc `
-    "nrfutil sdk-manager install $NcsRev --install-dir /opt/nordic/ncs"
+docker run --rm -v "${Volume}:/root/ncs" $Image bash -lc `
+    "nrfutil sdk-manager install $NcsRev --install-dir /root/ncs"
 
 Write-Host "`nInstalled NCS $NcsRev into volume '$Volume'." -ForegroundColor Green

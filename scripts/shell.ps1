@@ -16,9 +16,9 @@ $root = Split-Path -Parent $PSScriptRoot
 $name = Split-Path -Leaf $root
 $dest = "/workspaces/$name"
 
-$inner = "export ZEPHYR_BASE=/opt/nordic/ncs/$NcsRev/zephyr; cd $dest; exec bash"
+$inner = "export ZEPHYR_BASE=/root/ncs/$NcsRev/zephyr; cd $dest; exec bash"
 
 docker run -it --rm `
-    -v "${Volume}:/opt/nordic/ncs" `
+    -v "${Volume}:/root/ncs" `
     -v "${root}:${dest}" `
     $Image bash -lc "nrfutil toolchain-manager launch --ncs-version $NcsRev -- bash -c '$inner'"

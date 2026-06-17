@@ -5,17 +5,19 @@
   //     docker build -t ncs-base:latest .
   "image": "ncs-base:latest",
 
-  // Mount the SHARED SDK volume. All NCS versions + toolchains live here and
-  // are reused by every project/container. Install versions with nrfutil
-  // (./scripts/install-sdk.ps1) or the extension's "Manage SDKs" UI — they
-  // persist in the volume, so this never re-downloads.
-  "mounts": [
-    "source=ncs-sdks,target=/opt/nordic/ncs,type=volume"
-  ],
+  // Bind THIS project folder into the container explicitly. The app is
+  // freestanding: it builds against whichever SDK you select in the extension,
+  // it does NOT live inside the SDK tree.
+  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/${localWorkspaceFolderBasename},type=bind,consistency=cached",
 
-  // Default behaviour binds this project folder to /workspaces/<folder-name>.
-  // The app is freestanding: it builds against whichever SDK you select in the
-  // extension, it does NOT live inside the SDK tree.
+  // Mount the SHARED SDK volume at /root/ncs — the SAME directory the nRF
+  // Connect extension installs SDKs into by default (~/ncs). This is the whole
+  // trick: the extension's "Manage SDKs" UI and the install-sdk.ps1 script both
+  // write here, into the volume, so versions persist and both tools see them.
+  "mounts": [
+    "source=ncs-sdks,target=/root/ncs,type=volume"
+  ],
 
   "customizations": {
     "vscode": {
@@ -27,9 +29,16 @@
         "twxs.cmake"
       ],
       "settings": {
-        // The extension auto-discovers installed SDKs/toolchains from nrfutil's
-        // configured install dir (set to /opt/nordic/ncs in the image). Pick the
-        // SDK version + toolchain per build configuration in the nRF Connect view.
+        // CRITICAL: tell the extension where SDKs/toolchains live. Without this,
+        // the extension INSTALLS into ~/ncs (/root/ncs) but DISCOVERS toolchains
+        // from its bundled nrfutil's own default dir -> installed-but-not-listed
+        // -> "SDK not configured". Setting it makes the extension pass
+        // `--install-dir /root/ncs` for both install and discovery, so it sees
+        // everything in the shared volume. (scope: machine-overridable.)
+        "nrf-connect.toolchainManager.installDirectory": "/root/ncs",
+
+        // Pick the SDK version + toolchain per build configuration in the
+        // nRF Connect view; both v3.3.0 and v3.2.4 from the volume will list.
         "terminal.integrated.defaultProfile.linux": "bash",
         "C_Cpp.default.cppStandard": "c++23"
       }
