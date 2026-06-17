@@ -1,2 +1,1 @@
-- create workspace, then a projects folder inside it
-- use docker to create said workspace, such that it can be shared across different projects
+- test if devcontainer works, whilst creating a seperate docker image that could be used across different zephyr projects
