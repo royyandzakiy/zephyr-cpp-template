@@ -1,0 +1,5 @@
+# The workspace image is project-agnostic: it bakes in the SDK and does NOT
+# copy any project source (that gets bind-mounted at runtime). Keep the build
+# context empty so `docker build` is instant.
+*
+!Dockerfile

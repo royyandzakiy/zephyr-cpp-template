@@ -1,0 +1,2 @@
+- create workspace, then a projects folder inside it
+- use docker to create said workspace, such that it can be shared across different projects

@@ -1,0 +1,8 @@
+# Zephyr / west build output
+build/
+build-*/
+twister-out/
+
+# Editor / tooling
+.vscode/
+*.user
