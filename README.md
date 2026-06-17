@@ -30,9 +30,9 @@ the new project just attaches to the image you already have. No re-download.
 Build the shared image once (takes a while — it pulls the whole SDK):
 
 ```powershell
-./scripts/build-image.ps1                  # NCS v3.3.0 (matches the reference project)
+./scripts/docker-setup.ps1                  # NCS v3.3.0 (matches the reference project)
 # or track the bleeding edge:
-./scripts/build-image.ps1 -NcsRev main
+./scripts/docker-setup.ps1 -NcsRev main
 ```
 
 > The default pins **NCS v3.3.0** — the same release `balancer-robot-fw` is known
@@ -46,7 +46,7 @@ This produces the `ncs-workspace:latest` image. Every project from now on reuses
 ### Option A — VS Code Dev Container (gets the Nordic extensions)
 
 1. Open this folder in VS Code.
-2. *Reopen in Container* (Dev Containers extension). It attaches to
+2. _Reopen in Container_ (Dev Containers extension). It attaches to
    `ncs-workspace:latest` and mounts this folder into
    `/workspace/projects/<folder-name>`.
 3. In the integrated terminal:
@@ -90,18 +90,18 @@ toolchain other than ARM, rebuild the image with
 
 ## Files
 
-| Path | Purpose |
-|---|---|
-| `Dockerfile` | Builds the shared SDK workspace image (run once) |
-| `.devcontainer/devcontainer.json` | VS Code attaches to the image + Nordic extensions |
-| `CMakeLists.txt`, `prj.conf`, `src/main.cpp` | The bare C++23 blinky app |
-| `sample.yaml` | Twister build test (`west twister -T .`) |
-| `debug-overlay.conf` | Extra debug Kconfig (`-DEXTRA_CONF_FILE=...`) |
-| `.clang-format`, `.clang-tidy`, `.cmake-format.yaml` | Formatting/lint config (from the reference) |
-| `.vscode/settings.json` | C++23 IntelliSense + clang-tidy |
-| `scripts/build-image.ps1` | Build/refresh the shared image |
-| `scripts/shell.ps1` | Interactive shell with this project mounted |
-| `scripts/build.ps1` | One-shot headless build |
+| Path                                                 | Purpose                                           |
+| ---------------------------------------------------- | ------------------------------------------------- |
+| `Dockerfile`                                         | Builds the shared SDK workspace image (run once)  |
+| `.devcontainer/devcontainer.json`                    | VS Code attaches to the image + Nordic extensions |
+| `CMakeLists.txt`, `prj.conf`, `src/main.cpp`         | The bare C++23 blinky app                         |
+| `sample.yaml`                                        | Twister build test (`west twister -T .`)          |
+| `debug-overlay.conf`                                 | Extra debug Kconfig (`-DEXTRA_CONF_FILE=...`)     |
+| `.clang-format`, `.clang-tidy`, `.cmake-format.yaml` | Formatting/lint config (from the reference)       |
+| `.vscode/settings.json`                              | C++23 IntelliSense + clang-tidy                   |
+| `scripts/docker-setup.ps1`                           | Build/refresh the shared image                    |
+| `scripts/shell.ps1`                                  | Interactive shell with this project mounted       |
+| `scripts/build.ps1`                                  | One-shot headless build                           |
 
 ## C++ Kconfig notes
 
