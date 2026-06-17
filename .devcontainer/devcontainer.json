@@ -19,6 +19,12 @@
     "source=ncs-sdks,target=/root/ncs,type=volume"
   ],
 
+  // Register the volume's SDKs in the CMake user package registry on every
+  // start. The extension discovers SDKs from ~/.cmake/packages/Zephyr (not from
+  // the install dir), and that path is ephemeral — so without this, "Add build
+  // configuration" reports "SDK not configured" even though the SDKs are present.
+  "postStartCommand": "ncs-register-sdks",
+
   "customizations": {
     "vscode": {
       "extensions": [

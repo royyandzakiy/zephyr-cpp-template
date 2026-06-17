@@ -53,11 +53,38 @@ RUN curl -fsSL \
     && nrfutil install toolchain-manager \
     && nrfutil install sdk-manager || true
 
-# Point both nrfutil managers at the volume mount path. The VS Code extension
-# auto-discovers installed SDKs from sdk-manager's configured install dir.
+# Point both nrfutil managers at the volume mount path, so the install-sdk.ps1
+# CLI installs here and the extension's --install-dir (set via the
+# toolchainManager.installDirectory setting) resolves toolchains from the same
+# place. (SDK *discovery* by the extension is separate — see ncs-register-sdks.)
 RUN mkdir -p ${NCS_INSTALL_DIR} \
     && nrfutil sdk-manager config install-dir set ${NCS_INSTALL_DIR} \
     && nrfutil toolchain-manager config --set install-dir=${NCS_INSTALL_DIR}
+
+# The nRF Connect extension discovers SDKs by reading the CMake *user package
+# registry* (~/.cmake/packages/Zephyr) — i.e. where `west zephyr-export` would
+# register Zephyr. nrfutil's install does NOT do this, and ~/.cmake is in the
+# container's throwaway layer, so this script (re)creates those entries for
+# every SDK in the volume. It is run on each container start (postStartCommand).
+COPY <<'EOF' /usr/local/bin/ncs-register-sdks
+#!/usr/bin/env bash
+set -eu
+NCS_DIR="${NCS_INSTALL_DIR:-/root/ncs}"
+REG="${HOME}/.cmake/packages/Zephyr"
+mkdir -p "$REG"
+count=0
+for d in "$NCS_DIR"/v*/; do
+	[ -d "$d" ] || continue
+	pkg="${d}zephyr/share/zephyr-package/cmake"
+	[ -d "$pkg" ] || continue
+	h="$(printf '%s' "$pkg" | md5sum | cut -d' ' -f1)"
+	printf '%s' "$pkg" > "${REG}/${h}"
+	echo "registered $(basename "$d") -> $pkg"
+	count=$((count + 1))
+done
+echo "ncs-register-sdks: registered ${count} SDK(s) for the nRF Connect extension"
+EOF
+RUN chmod +x /usr/local/bin/ncs-register-sdks
 
 WORKDIR /workspaces
 CMD ["bash"]
