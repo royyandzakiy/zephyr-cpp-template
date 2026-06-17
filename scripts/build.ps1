@@ -1,23 +1,31 @@
-# One-shot build of this project inside the shared image (no interactive shell).
-# Build artifacts land in ./build on the host (it's bind-mounted).
+# Headless build of THIS project against a chosen SDK version in the shared
+# volume. Pick the version with -NcsRev; artifacts land in ./build on the host.
 #
-#   ./scripts/build.ps1
-#   ./scripts/build.ps1 -Board nrf5340dk/nrf5340/cpuapp -Pristine
+#   ./scripts/build.ps1                                   # v3.3.0, nRF5340 DK
+#   ./scripts/build.ps1 -NcsRev v3.2.4
+#   ./scripts/build.ps1 -Board nrf52840dk/nrf52840 -Pristine
 param(
+    [string]$NcsRev  = "v3.3.0",
     [string]$Board   = "nrf5340dk/nrf5340/cpuapp",
-    [string]$Tag     = "ncs-workspace:latest",
+    [string]$Image   = "ncs-base:latest",
+    [string]$Volume  = "ncs-sdks",
     [switch]$Pristine
 )
 
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 $name = Split-Path -Leaf $root
-$dest = "/workspace/projects/$name"
-$pristineFlag = if ($Pristine) { "-p always" } else { "" }
+$dest = "/workspaces/$name"
+$p    = if ($Pristine) { "-p always" } else { "" }
+
+# Launch sets up the toolchain env; ZEPHYR_BASE selects which SDK to build against.
+$inner = "export ZEPHYR_BASE=/opt/nordic/ncs/$NcsRev/zephyr; " +
+         "west build -b $Board $dest --build-dir $dest/build $p"
 
 docker run --rm `
+    -v "${Volume}:/opt/nordic/ncs" `
     -v "${root}:${dest}" `
-    -w $dest `
-    $Tag bash -lc "west build -b $Board $pristineFlag ."
+    $Image bash -lc "nrfutil toolchain-manager launch --ncs-version $NcsRev -- bash -c '$inner'"
 
-Write-Host "`nBuilt for $Board. Flash from the host: nrfutil device program --firmware build/zephyr/zephyr.hex" -ForegroundColor Green
+Write-Host "`nBuilt $name for $Board with NCS $NcsRev." -ForegroundColor Green
+Write-Host "Flash from the host: nrfutil device program --firmware build/$name/zephyr/zephyr.hex" -ForegroundColor Yellow

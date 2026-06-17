@@ -1,68 +1,58 @@
 # syntax=docker/dockerfile:1
 
 ###############################################################################
-# nRF Connect SDK (NCS) shared workspace image.
+# ncs-base : a SMALL, version-agnostic nRF Connect SDK build image.
 #
-# The heavy parts -- the nRF SDK, Zephyr, every west module, and the matching
-# Zephyr SDK toolchain -- are downloaded and baked into THIS image exactly once.
+# This image contains ONLY the host tools + nrfutil. It does NOT contain any
+# SDK. The actual nRF Connect SDK versions + their matching toolchains are
+# installed by nrfutil into a Docker *volume* mounted at /opt/nordic/ncs, so:
 #
-# Every project then reuses the same image (via .devcontainer or the helper
-# scripts) and only bind-mounts its own source into /workspace/projects/<name>.
-# Copying this template to a new project therefore costs ZERO extra SDK
-# downloads: you keep using the one image you already built.
+#   * the image stays small and rarely changes
+#   * many SDK versions live side-by-side in the volume (like your C:\ncs)
+#   * you add/remove versions with nrfutil -- no image rebuild
+#   * every project + every container shares the one volume
 #
-#   Build once:   docker build -t ncs-workspace:latest .
-#   Rebuild SDK:  docker build --no-cache -t ncs-workspace:latest .
+# The layout produced in the volume mirrors a native Nordic install, which is
+# exactly what the nRF Connect for VS Code extension auto-discovers:
+#
+#   /opt/nordic/ncs/
+#   ├── toolchains/<bundle>/      (one toolchain per version)
+#   ├── v3.3.0/                   (full west workspace)
+#   └── v3.2.x/ ...
+#
+#   Build once:   docker build -t ncs-base:latest .
 ###############################################################################
 
 FROM ubuntu:24.04
 
-# Which nRF Connect SDK revision to check out. Defaults to v3.3.0 — the same
-# known-good release the reference project (balancer-robot-fw) builds with, so
-# C++23 + full STL is guaranteed to work. For the bleeding edge use:
-#   docker build --build-arg NCS_REV=main -t ncs-workspace:latest .
-ARG NCS_REV=v3.3.0
-
-# Only the ARM toolchain is installed by default (nRF5340 is Cortex-M33).
-# Set to "all" to cover every architecture.
-ARG ZEPHYR_TOOLCHAINS=arm-zephyr-eabi
-
 ENV DEBIAN_FRONTEND=noninteractive
 
-# --- Host dependencies (Zephyr getting-started + flashing tools) -------------
+# Where nrfutil installs SDKs + toolchains. This path is the Docker volume
+# mount point; the extension is pointed here too.
+ENV NCS_INSTALL_DIR=/opt/nordic/ncs
+
+# --- Minimal host dependencies ----------------------------------------------
+# nrfutil's toolchain bundles ship their own cmake/ninja/python/west, so we
+# only need a lean host layer (git for west, libusb for tooling, certs, etc.).
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      git cmake ninja-build gperf ccache dfu-util device-tree-compiler wget curl \
-      python3-dev python3-pip python3-venv python3-setuptools python3-wheel \
-      xz-utils file make gcc gcc-multilib g++-multilib \
-      libsdl2-dev libmagic1 libusb-1.0-0 udev usbutils \
-      ca-certificates \
+      ca-certificates curl wget git \
+      python3 python3-venv \
+      file xz-utils libusb-1.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
-# --- west in an isolated venv (Ubuntu 24.04 is PEP-668 "externally managed") -
-ENV VIRTUAL_ENV=/opt/venv
-RUN python3 -m venv "$VIRTUAL_ENV"
-ENV PATH="$VIRTUAL_ENV/bin:$PATH"
-RUN pip install --no-cache-dir --upgrade pip wheel west
+# --- nrfutil + the commands the extension uses ------------------------------
+RUN curl -fsSL \
+      https://files.nordicsemi.com/artifactory/swtools/external/nrfutil/executables/x86_64-unknown-linux-gnu/nrfutil \
+      -o /usr/local/bin/nrfutil \
+    && chmod +x /usr/local/bin/nrfutil \
+    && nrfutil install toolchain-manager \
+    && nrfutil install sdk-manager || true
 
-# --- Initialise the NCS west workspace and pull all sources ------------------
-# --narrow -o=--depth=1 keeps the clone shallow so the image stays as small as
-# a full NCS checkout reasonably can.
-WORKDIR /workspace
-RUN west init -m https://github.com/nrfconnect/sdk-nrf --mr "$NCS_REV" . \
-    && west update --narrow -o=--depth=1 \
-    && west zephyr-export
+# Point both nrfutil managers at the volume mount path. The VS Code extension
+# auto-discovers installed SDKs from sdk-manager's configured install dir.
+RUN mkdir -p ${NCS_INSTALL_DIR} \
+    && nrfutil sdk-manager config install-dir set ${NCS_INSTALL_DIR} \
+    && nrfutil toolchain-manager config --set install-dir=${NCS_INSTALL_DIR}
 
-# --- Python requirements for Zephyr + NCS ------------------------------------
-RUN pip install --no-cache-dir -r zephyr/scripts/requirements.txt \
-    && pip install --no-cache-dir -r nrf/scripts/requirements.txt
-
-# --- Zephyr SDK (toolchain that matches this NCS revision) -------------------
-RUN west sdk install --toolchains "$ZEPHYR_TOOLCHAINS"
-
-# --- Workspace conveniences --------------------------------------------------
-# Projects get mounted in here at runtime; one subfolder per project.
-RUN mkdir -p /workspace/projects
-ENV ZEPHYR_BASE=/workspace/zephyr
-
-WORKDIR /workspace/projects
+WORKDIR /workspaces
 CMD ["bash"]

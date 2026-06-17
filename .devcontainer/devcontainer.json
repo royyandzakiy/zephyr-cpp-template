@@ -1,18 +1,21 @@
 {
   "name": "nRF Connect SDK (C++)",
 
-  // Reuse the ONE shared workspace image that already contains the SDK.
-  // Build it once (from a checkout of this template) with:
-  //     docker build -t ncs-workspace:latest .
-  // Every project that uses this devcontainer then points at the same image,
-  // so opening a new project never re-downloads the nRF SDK.
-  "image": "ncs-workspace:latest",
+  // Small, version-agnostic base image (host tools + nrfutil). Build it once:
+  //     docker build -t ncs-base:latest .
+  "image": "ncs-base:latest",
 
-  // Mount THIS project's folder into the shared workspace's projects/ dir.
-  // ${localWorkspaceFolderBasename} is the project folder's name, so a copy
-  // called "my-thing" lands at /workspace/projects/my-thing.
-  "workspaceFolder": "/workspace/projects/${localWorkspaceFolderBasename}",
-  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace/projects/${localWorkspaceFolderBasename},type=bind,consistency=cached",
+  // Mount the SHARED SDK volume. All NCS versions + toolchains live here and
+  // are reused by every project/container. Install versions with nrfutil
+  // (./scripts/install-sdk.ps1) or the extension's "Manage SDKs" UI — they
+  // persist in the volume, so this never re-downloads.
+  "mounts": [
+    "source=ncs-sdks,target=/opt/nordic/ncs,type=volume"
+  ],
+
+  // Default behaviour binds this project folder to /workspaces/<folder-name>.
+  // The app is freestanding: it builds against whichever SDK you select in the
+  // extension, it does NOT live inside the SDK tree.
 
   "customizations": {
     "vscode": {
@@ -24,21 +27,15 @@
         "twxs.cmake"
       ],
       "settings": {
-        // Tell the nRF Connect extension where the west workspace lives and to
-        // use the tools already on PATH (the venv + west sdk install), rather
-        // than its own toolchain manager.
-        "nrf-connect.topdir": "/workspace",
-        "nrf-connect.toolchain.path": "PATH",
-        "nrf-connect.west.env": {
-          "ZEPHYR_BASE": "/workspace/zephyr"
-        },
-        "terminal.integrated.defaultProfile.linux": "bash"
+        // The extension auto-discovers installed SDKs/toolchains from nrfutil's
+        // configured install dir (set to /opt/nordic/ncs in the image). Pick the
+        // SDK version + toolchain per build configuration in the nRF Connect view.
+        "terminal.integrated.defaultProfile.linux": "bash",
+        "C_Cpp.default.cppStandard": "c++23"
       }
     }
   }
 
-  // NOTE: flashing/debugging hardware from inside a container is not practical
-  // on Windows (Docker Desktop/WSL2 can't pass through J-Link USB cleanly).
-  // Build in here, then flash from the Windows host with nRF Util / J-Link,
-  // or run the helper scripts. See README.md.
+  // NOTE: flashing/debugging over J-Link USB from inside a container is not
+  // practical on Windows. Build here, flash from the Windows host with nRF Util.
 }

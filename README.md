@@ -1,112 +1,109 @@
 # zephyr-cpp-template
 
-A copy-me template for nRF Connect SDK (NCS) C++ applications. The nRF SDK is
-downloaded **once** into a shared Docker image; every project you spin off from
-this template reuses that same image and only mounts its own source — so you
-never re-download the multi-GB SDK per project.
+A copy-me template for nRF Connect SDK (NCS) C++ applications.
+
+SDK versions are managed by **nrfutil** (the same tool the nRF Connect for VS Code
+extension uses) and stored in a shared **Docker volume**, so:
+
+- many NCS versions live side-by-side and you pick which to build with — per project,
+  in the extension
+- each version is downloaded **once** and reused by every project and every container
+- the Docker image stays tiny; you add/remove SDK versions with nrfutil, no rebuild
 
 ## How it works
 
+Three separate pieces, each with one job:
+
 ```
-ncs-workspace:latest  (Docker image, built once)
-└── /workspace/                 ← west workspace, SDK baked in
-    ├── zephyr/ nrf/ modules/   ← the heavy SDK (lives in the image)
-    └── projects/
-        └── <your-project>/     ← YOUR source, bind-mounted at runtime
+ncs-base:latest            (Docker image)   host tools + nrfutil only — small, stable
+        │
+        │ runs, mounting ▼
+ncs-sdks                   (Docker volume)  the SDK STORE, shared by everything:
+  /opt/nordic/ncs/
+  ├── toolchains/<bundle>/      one matching toolchain per version
+  ├── v3.3.0/                   full west workspace
+  └── v3.2.4/                   full west workspace
+        │
+        │ + bind-mount ▼
+<your-repo>/               (this folder)    a FREESTANDING app — builds against
+  CMakeLists.txt                            whichever SDK version you select; it does
+  prj.conf                                  NOT live inside the SDK tree
+  src/main.cpp
 ```
 
-- **`Dockerfile`** builds the shared `ncs-workspace` image: it runs
-  `west init` against `sdk-nrf`, `west update`, and `west sdk install`. This is
-  the only step that touches the network.
-- **`.devcontainer/`** and **`scripts/`** both point at that pre-built image and
-  bind-mount the current project into `/workspace/projects/<folder-name>`.
+This is the same layout as a native Windows install (`C:\ncs\v3.3.0`,
+`C:\ncs\toolchains\...`), which is exactly what the extension auto-discovers.
 
-Copying this template gives you a new folder with the same `Dockerfile` and
-configs. Because they reference the image **by tag** (`ncs-workspace:latest`),
-the new project just attaches to the image you already have. No re-download.
-
-## One-time setup
-
-Build the shared image once (takes a while — it pulls the whole SDK):
+## One-time setup (per machine)
 
 ```powershell
-./scripts/docker-setup.ps1                  # NCS v3.3.0 (matches the reference project)
-# or track the bleeding edge:
-./scripts/docker-setup.ps1 -NcsRev main
+# 1. Build the small base image + create the shared volume
+./scripts/build-image.ps1
+
+# 2. Install the SDK version(s) you want into the volume (downloads once each)
+./scripts/install-sdk.ps1 -NcsRev v3.3.0
+./scripts/install-sdk.ps1 -NcsRev v3.2.4
+
+# See what's available / installed
+./scripts/install-sdk.ps1 -List
 ```
 
-> The default pins **NCS v3.3.0** — the same release `balancer-robot-fw` is known
-> to build with, so the C++23 + STL setup is guaranteed to work. Bump it when you're
-> ready to move.
-
-This produces the `ncs-workspace:latest` image. Every project from now on reuses it.
+You can also install versions later from the extension's **Manage SDKs / Manage
+toolchains** UI inside the dev container — they go into the same volume.
 
 ## Per-project workflow
 
-### Option A — VS Code Dev Container (gets the Nordic extensions)
+### Option A — VS Code Dev Container (recommended; full extension UX)
 
-1. Open this folder in VS Code.
-2. _Reopen in Container_ (Dev Containers extension). It attaches to
-   `ncs-workspace:latest` and mounts this folder into
-   `/workspace/projects/<folder-name>`.
-3. In the integrated terminal:
-   ```bash
-   west build -b nrf5340dk/nrf5340/cpuapp .
-   ```
+1. Open this folder in VS Code → *Reopen in Container*. It attaches to
+   `ncs-base:latest` and mounts the shared `ncs-sdks` volume.
+2. In the **nRF Connect** view, *Add build configuration* → pick the **SDK
+   version**, **toolchain**, and **board** (`nrf5340dk/nrf5340/cpuapp`) → Build.
+3. Switch versions anytime by adding another build configuration with a different
+   SDK version. Both stay side-by-side.
 
 ### Option B — plain Docker (no VS Code)
 
 ```powershell
-./scripts/build.ps1            # one-shot build for the nRF5340 DK
-# or drop into a shell:
-./scripts/shell.ps1
-#   west build -b nrf5340dk/nrf5340/cpuapp .
+./scripts/build.ps1                     # v3.3.0, nRF5340 DK
+./scripts/build.ps1 -NcsRev v3.2.4      # build the SAME project against another version
+./scripts/shell.ps1 -NcsRev v3.3.0      # interactive; then: west build -b nrf5340dk/nrf5340/cpuapp .
 ```
 
-Build artifacts land in `./build/` on your host (the folder is bind-mounted).
+Artifacts land in `./build/` on the host (the folder is bind-mounted).
+
+## Switching SDK versions
+
+The whole point of this layout: the project is freestanding, so the **only** thing
+that selects the SDK is the version you point at.
+
+- **Extension:** choose the SDK version in the build configuration.
+- **Scripts:** pass `-NcsRev v3.x.y`.
+
+Both `v3.3.0` and `v3.2.4` are installed and verified to build this template.
 
 ## Flashing
 
-Flashing/debugging over J-Link USB **from inside a container does not work
-cleanly on Windows** (Docker Desktop/WSL2 USB passthrough). Build in the
-container, then flash from the Windows host:
+Flashing over J-Link USB from inside a container is not practical on Windows
+(Docker Desktop/WSL2 USB passthrough). Build in the container, then flash from the
+Windows host:
 
 ```powershell
-nrfutil device program --firmware build/zephyr/zephyr.hex --options reset=RESET_SYSTEM
-# or with the J-Link / nRF Connect Programmer GUI
+nrfutil device program --firmware build/<project>/zephyr/zephyr.hex --options reset=RESET_SYSTEM
+# or the nRF Connect Programmer / J-Link GUI
 ```
 
 ## Starting a new project
 
 1. Copy this whole folder to a new name, e.g. `my-sensor`.
 2. (Optional) rename the CMake `project()` in `CMakeLists.txt`.
-3. Open it / run the scripts. It binds to the same image — instant, no download.
-
-## Targeting a different board
-
-Change the `-b` argument, e.g. `-b nrf52840dk/nrf52840`. If the board needs a
-toolchain other than ARM, rebuild the image with
-`--build-arg ZEPHYR_TOOLCHAINS=all`.
-
-## Files
-
-| Path                                                 | Purpose                                           |
-| ---------------------------------------------------- | ------------------------------------------------- |
-| `Dockerfile`                                         | Builds the shared SDK workspace image (run once)  |
-| `.devcontainer/devcontainer.json`                    | VS Code attaches to the image + Nordic extensions |
-| `CMakeLists.txt`, `prj.conf`, `src/main.cpp`         | The bare C++23 blinky app                         |
-| `sample.yaml`                                        | Twister build test (`west twister -T .`)          |
-| `debug-overlay.conf`                                 | Extra debug Kconfig (`-DEXTRA_CONF_FILE=...`)     |
-| `.clang-format`, `.clang-tidy`, `.cmake-format.yaml` | Formatting/lint config (from the reference)       |
-| `.vscode/settings.json`                              | C++23 IntelliSense + clang-tidy                   |
-| `scripts/docker-setup.ps1`                           | Build/refresh the shared image                    |
-| `scripts/shell.ps1`                                  | Interactive shell with this project mounted       |
-| `scripts/build.ps1`                                  | One-shot headless build                           |
+3. Open it / run the scripts. It attaches to the same image and the same SDK
+   volume — instant, no downloads.
 
 ## C++ Kconfig notes
 
-The C++ support in `prj.conf` mirrors the reference project — the non-obvious part
-of getting C++ to build on Zephyr:
+The C++ support in `prj.conf` mirrors the reference project (`balancer-robot-fw`) —
+the non-obvious part of getting C++ to build on Zephyr:
 
 ```
 CONFIG_CPP=y
@@ -120,3 +117,19 @@ CONFIG_HEAP_MEM_POOL_SIZE=8192
 No `boards/` overlay is needed for the bare nRF5340 DK build — `led0` comes from
 the in-tree board devicetree. Add a `boards/` folder only when you need pin/peripheral
 overlays for a custom board.
+
+## Files
+
+| Path | Purpose |
+|---|---|
+| `Dockerfile` | Builds the small `ncs-base` image (host tools + nrfutil) |
+| `.devcontainer/devcontainer.json` | Attaches to the image + mounts the SDK volume + Nordic extensions |
+| `CMakeLists.txt`, `prj.conf`, `src/main.cpp` | The bare C++23 blinky app (freestanding) |
+| `sample.yaml` | Twister build test |
+| `debug-overlay.conf` | Extra debug Kconfig (`-DEXTRA_CONF_FILE=...`) |
+| `.clang-format`, `.clang-tidy`, `.cmake-format.yaml` | Formatting/lint config (from the reference) |
+| `.vscode/settings.json` | C++23 IntelliSense + clang-tidy |
+| `scripts/build-image.ps1` | Build base image + create the SDK volume (once) |
+| `scripts/install-sdk.ps1` | Install/list NCS versions in the shared volume |
+| `scripts/build.ps1` | Headless build against a chosen version |
+| `scripts/shell.ps1` | Interactive shell for a chosen version |
