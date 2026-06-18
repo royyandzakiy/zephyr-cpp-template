@@ -23,6 +23,12 @@
 #   Build once:   docker build -t ncs-base:latest .
 ###############################################################################
 
+# Build this image for amd64: nrfutil, the Zephyr SDK toolchains, and SEGGER
+# J-Link are all x86_64. ALWAYS build with `--platform=linux/amd64` (the
+# `ncs.py build-image` command and the devcontainer do this). On Apple Silicon /
+# arm64 Linux it then runs under emulation (Docker Desktop Rosetta / qemu) —
+# slower, but identical across hosts. (Platform is set at build time, not in
+# FROM, to satisfy BuildKit's lint.)
 FROM ubuntu:24.04
 
 ENV DEBIAN_FRONTEND=noninteractive

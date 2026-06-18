@@ -13,7 +13,13 @@
   //     usbipd attach --wsl --busid <id>  (detaches it from Windows!)
   // Flashing/RTT use the J-Link debug interface (libusb) — they do NOT need
   // /dev/ttyACM, so no cdc_acm / custom kernel is required. Monitor over RTT.
+  // --platform pins amd64 so the image is identical on every host (emulated on
+  // Apple Silicon / arm64). --privileged + the /dev mount below give hardware
+  // access for flashing/RTT on Windows (via usbipd) and Linux (native USB).
+  // On macOS there is no USB passthrough to containers — build here, flash from
+  // the host; you can drop the "/dev" mount there if it bothers Docker Desktop.
   "runArgs": [
+    "--platform=linux/amd64",
     "--privileged",
     "--cap-add=SYS_PTRACE",
     "--security-opt", "seccomp=unconfined"

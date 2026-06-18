@@ -106,6 +106,27 @@ Python is already required by the nRF/Zephyr ecosystem, so there's no new depend
 
 ## 4. Quick practical how-to
 
+### Host requirements & platform support
+
+Works on **Windows 11, Ubuntu/Linux, and macOS** (Intel *and* Apple Silicon). You
+need **Docker** and **Python 3** on the host; for host-side flashing you also need
+**nrfutil** + **J-Link drivers** on the host.
+
+Invoke the CLI as `./scripts/ncs.py <cmd>` (Linux/macOS, it's executable) or
+`python3 scripts/ncs.py <cmd>` / `python scripts\ncs.py <cmd>` (Windows).
+
+| | Build in container | Flash / RTT / VCOM **in** container | Flash from host |
+|---|---|---|---|
+| **Windows 11** | ✅ | ✅ via `usbipd attach` (§6) | ✅ `ncs.py flash` |
+| **Ubuntu/Linux** | ✅ | ✅ **native USB** — no usbipd; `cdc_acm` built in | ✅ |
+| **macOS** (Intel/ARM) | ✅ (amd64, emulated on Apple Silicon) | ❌ Docker Desktop has **no USB passthrough** | ✅ — the only hardware path on Mac |
+
+So everyone builds the same way; only the *hardware* path differs. On macOS you
+build in the container and **flash/monitor from the host** (`ncs.py flash`, and
+JLinkRTTViewer / a serial terminal natively). On Linux it's the smoothest —
+the J-Link is a native USB device, so in-container flashing just works once you
+rebuild the container. See §6 for the per-OS hardware steps.
+
 ### One-time, on this machine
 
 ```bash
@@ -202,12 +223,24 @@ Two interfaces matter on the J-Link, and they have very different needs:
 | Task | Interface | Needs a kernel driver? |
 |---|---|---|
 | Flash, debug, **RTT monitor** | debug probe, via **libusb** | No — just USB access (`--privileged`) |
-| UART console on `/dev/ttyACM*` | CDC-ACM VCOM | **Yes** — `cdc_acm` in the WSL2 kernel |
+| UART console on `/dev/ttyACM*` | CDC-ACM VCOM | **Yes** — `cdc_acm` in the host kernel (built in on Linux; a module on WSL2) |
 
-So **flashing and RTT monitoring work in the container**; only the VCOM serial
-port needs a custom kernel — and **RTT replaces it**, so you don't need one.
+So **flashing and RTT monitoring work in the container** (Windows/Linux); the VCOM
+serial port additionally needs `cdc_acm` — already present on Linux and on recent
+WSL2 kernels. **RTT replaces it**, so the serial port is optional.
 
-### In the container (Windows + WSL2)
+### In the container — Linux host (simplest)
+
+The J-Link is a native USB device, so there's **no usbipd** and `cdc_acm` is in
+the stock kernel. Just rebuild the container and flash:
+```bash
+west flash -d build          # in the container terminal
+```
+RTT and the `/dev/ttyACM*` VCOM both work out of the box (the devcontainer already
+has `--privileged` + the `/dev` mount + the J-Link runtime). If your host user
+isn't in the `docker`/`dialout` groups you may need to add it for probe access.
+
+### In the container — Windows host (WSL2 + usbipd)
 
 1. Forward the probe to WSL2 (this detaches it from Windows):
    ```powershell

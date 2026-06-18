@@ -27,6 +27,7 @@ DEST = f"/workspaces/{PROJECT}"               # where the project mounts in-cont
 IMAGE = "ncs-base:latest"
 VOLUME = "ncs-sdks"
 NCS_DIR = "/root/ncs"
+PLATFORM = "linux/amd64"   # x86_64 tooling; emulated on Apple Silicon / arm64
 
 
 def run(cmd, **kw):
@@ -37,7 +38,7 @@ def run(cmd, **kw):
 
 def docker_run(args, *, interactive=False, with_project=False):
     """Assemble a `docker run` invocation against the shared SDK volume."""
-    cmd = ["docker", "run", "--rm"]
+    cmd = ["docker", "run", "--rm", "--platform", PLATFORM]
     if interactive:
         tty = sys.stdin.isatty() and sys.stdout.isatty()
         cmd += ["-it"] if tty else ["-i"]
@@ -60,7 +61,7 @@ def launch(ncs_rev, inner):
 # --- subcommands -------------------------------------------------------------
 
 def cmd_build_image(a):
-    run(["docker", "build", "-t", IMAGE, str(ROOT)])
+    run(["docker", "build", "--platform", PLATFORM, "-t", IMAGE, str(ROOT)])
     run(["docker", "volume", "create", VOLUME], stdout=subprocess.DEVNULL)
     print(f"\nBuilt {IMAGE} and ensured volume '{VOLUME}'.")
     print("Next: install an SDK  ->  python scripts/ncs.py install-sdk v3.3.0")
