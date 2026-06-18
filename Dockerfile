@@ -51,7 +51,35 @@ RUN curl -fsSL \
       -o /usr/local/bin/nrfutil \
     && chmod +x /usr/local/bin/nrfutil \
     && nrfutil install toolchain-manager \
-    && nrfutil install sdk-manager || true
+    && nrfutil install sdk-manager \
+    && nrfutil install device || true
+
+# --- SEGGER J-Link software --------------------------------------------------
+# `nrfutil device` needs SEGGER's libjlinkarm to program/debug over a J-Link;
+# without it you get "JLinkARM DLL not found" and flashing fails with
+# "operation not available / Unable to find a board".
+#
+# We use the headless .tgz (the .deb hard-depends on Qt4, absent on Ubuntu 24.04).
+# CARE: the tarball ships BOTH 64-bit and 32-bit libjlinkarm with the SAME soname
+# (libjlinkarm.so.9). Running `ldconfig` over its dir picks the 32-bit one and
+# breaks loading on a 64-bit host. So we instead force the in-dir symlink to the
+# 64-bit lib and register *only* that in an isolated dir.
+RUN curl -fsSL -X POST \
+      -d "accept_license_agreement=accepted" -d "submit=Download software" \
+      https://www.segger.com/downloads/jlink/JLink_Linux_x86_64.tgz -o /tmp/jlink.tgz \
+    && mkdir -p /opt/SEGGER \
+    && tar -xzf /tmp/jlink.tgz -C /opt/SEGGER \
+    && ln -sfn /opt/SEGGER/JLink_Linux_* /opt/SEGGER/JLink \
+    && SO64="$(find -L /opt/SEGGER/JLink/ -maxdepth 1 -name 'libjlinkarm.so.*' ! -name '*_x86*' -type f | sort -V | tail -1)" \
+    && ln -sf "$(basename "$SO64")" /opt/SEGGER/JLink/libjlinkarm.so.9 \
+    && ln -sf libjlinkarm.so.9 /opt/SEGGER/JLink/libjlinkarm.so \
+    && mkdir -p /usr/local/lib/jlink \
+    && ln -sf "$SO64" /usr/local/lib/jlink/libjlinkarm.so.9 \
+    && ln -sf libjlinkarm.so.9 /usr/local/lib/jlink/libjlinkarm.so \
+    && echo /usr/local/lib/jlink > /etc/ld.so.conf.d/jlink.conf \
+    && ldconfig \
+    && rm -f /tmp/jlink.tgz
+ENV PATH="/opt/SEGGER/JLink:${PATH}"
 
 # Point both nrfutil managers at the volume mount path, so the install-sdk.ps1
 # CLI installs here and the extension's --install-dir (set via the

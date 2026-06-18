@@ -5,6 +5,20 @@
   //     docker build -t ncs-base:latest .
   "image": "ncs-base:latest",
 
+  // Hardware access for flashing + RTT monitoring from inside the container.
+  // --privileged lets the container CLAIM the J-Link over libusb (the debug
+  // probe); SYS_PTRACE + unconfined seccomp are for on-target debugging.
+  // On Windows you must first forward the probe to WSL2:
+  //     usbipd list                       (find the J-Link's BUSID)
+  //     usbipd attach --wsl --busid <id>  (detaches it from Windows!)
+  // Flashing/RTT use the J-Link debug interface (libusb) — they do NOT need
+  // /dev/ttyACM, so no cdc_acm / custom kernel is required. Monitor over RTT.
+  "runArgs": [
+    "--privileged",
+    "--cap-add=SYS_PTRACE",
+    "--security-opt", "seccomp=unconfined"
+  ],
+
   // Bind THIS project folder into the container explicitly. The app is
   // freestanding: it builds against whichever SDK you select in the extension,
   // it does NOT live inside the SDK tree.
@@ -18,7 +32,10 @@
   "mounts": [
     "source=ncs-sdks,target=/root/ncs,type=volume",
     // Persist ~/.ssh so the key survives rebuilds — add it to your Git host once.
-    "source=ncs-ssh,target=/root/.ssh,type=volume"
+    "source=ncs-ssh,target=/root/.ssh,type=volume",
+    // USB bus so libusb (J-Link) sees the forwarded probe. Live with the host VM,
+    // so a probe attached via `usbipd attach` after start still shows up.
+    "source=/dev/bus/usb,target=/dev/bus/usb,type=bind"
   ],
 
   // On container creation: ensure an SSH key exists and print its PUBLIC key in

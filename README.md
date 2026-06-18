@@ -192,37 +192,55 @@ in-tree board devicetree. Add a `boards/` folder only for custom-board overlays.
 
 ---
 
-## 6. Flashing
+## 6. Flashing & monitoring
 
-**Build in the container, flash from the Windows host.** This is the reliable
-workflow on Windows. A helper does it for you:
+Two interfaces matter on the J-Link, and they have very different needs:
+
+| Task | Interface | Needs a kernel driver? |
+|---|---|---|
+| Flash, debug, **RTT monitor** | debug probe, via **libusb** | No — just USB access (`--privileged`) |
+| UART console on `/dev/ttyACM*` | CDC-ACM VCOM | **Yes** — `cdc_acm` in the WSL2 kernel |
+
+So **flashing and RTT monitoring work in the container**; only the VCOM serial
+port needs a custom kernel — and **RTT replaces it**, so you don't need one.
+
+### In the container (Windows + WSL2)
+
+1. Forward the probe to WSL2 (this detaches it from Windows):
+   ```powershell
+   usbipd list                          # find the J-Link BUSID
+   usbipd attach --wsl --busid <BUSID>
+   ```
+2. The devcontainer already has `--privileged` + `/dev/bus/usb` (see
+   `devcontainer.json` §`runArgs`/`mounts`), and the image bundles the **SEGGER
+   J-Link runtime** (`libjlinkarm`) that `nrfutil device` needs — so the probe is
+   both reachable *and* drivable. (Without that runtime you'd see "JLinkARM DLL
+   not found" / "device cannot be recognized (NotFound)".)
+3. **Flash**: the extension's Flash action, or in the terminal:
+   ```bash
+   west flash -d build
+   ```
+4. **Monitor**: use **RTT**, not the serial terminal — *nRF Connect: Connect to
+   RTT* (or the RTT button on the build). RTT goes over the debug probe, so it
+   needs no `/dev/ttyACM` and no `cdc_acm`.
+
+> The earlier `cannot open /dev/ttyACM1` error was the extension's *serial*
+> monitor; switch the monitor to **RTT** and it's irrelevant. A custom WSL2
+> kernel with `cdc_acm` is only worth building if you specifically need the UART
+> VCOM instead of RTT.
+
+### From the Windows host (fallback / simplest)
+
+If you'd rather not juggle `usbipd` (you can't use the probe on Windows and in
+WSL at the same time), build in the container and flash from the host:
 
 ```powershell
-./scripts/flash.ps1                       # picks build\merged.hex automatically
+./scripts/flash.ps1                            # picks build\merged.hex
 ./scripts/flash.ps1 -SerialNumber 1050073602   # if more than one probe
 ```
-It runs the host's `nrfutil device program` (J-Link) against the `.hex` in the
-bind-mounted `build/` folder. Or use the **nRF Connect Programmer** GUI / the
-host's nRF Connect extension. For the console, open the J-Link **VCOM COM port**
-in a Windows serial terminal (e.g. nRF Connect Serial Terminal).
-
-### Why not flash from inside the container?
-
-On Windows the container runs under WSL2, and USB reaches it only via
-`usbipd-win`. Even after `usbipd attach` (so `lsusb` *does* show the J-Link),
-two things break:
-
-- **No `/dev/ttyACM*`** — the J-Link VCOM needs the `cdc_acm` driver bound in the
-  *WSL2 kernel*, which the stock kernel doesn't do. So the extension's serial
-  monitor fails with `cannot open /dev/ttyACM1`.
-- **`west flash` fails** with `operation not available for the selected device
-  (NotFound)` — `nrfutil`'s J-Link backend can't reliably drive the probe over
-  USB/IP, even though the device enumerates.
-
-Neither is a problem with this template (your build is fine) — it's USB
-passthrough on Windows. Flashing from the host sidesteps both. (On a **Linux
-host**, in-container flashing *can* work: add `"runArgs": ["--privileged"]` and
-mount `/dev/bus/usb` in `devcontainer.json` — ask if you want that wired in.)
+That runs the host's `nrfutil device program` against the `.hex` in the
+bind-mounted `build/` folder. For the console, open the J-Link VCOM COM port in a
+Windows serial terminal.
 
 ---
 
