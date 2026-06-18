@@ -49,12 +49,12 @@
   // On container creation: ensure an SSH key exists and print its PUBLIC key in
   // the creation log (View → "Dev Containers: Show Container Log"). For the
   // guided flow (open the host's key page + verify the connection), run
-  // `ncs-ssh-setup bitbucket.org` in the terminal — `ncs-add-sdk` does this
+  // `ncs-ssh-setup github.com` in the terminal — `ncs-add-sdk` does this
   // automatically for SSH URLs.
   //
-  // The trailing clause runs the OPTIONAL private first-time SDK setup ONLY if
-  // .devcontainer/setup-local.sh exists. Delete that file to drop private support
-  // entirely — no change here needed.
+  // The trailing clause runs an OPTIONAL local first-time setup script ONLY if
+  // .devcontainer/setup-local.sh exists (it's gitignored). Use it to install a
+  // private/forked SDK, etc. Public copies ship without it, so it's a no-op.
   "postCreateCommand": "ncs-ssh-key; if [ -f .devcontainer/setup-local.sh ]; then bash .devcontainer/setup-local.sh; fi",
 
   // Register the volume's SDKs in the CMake user package registry on every

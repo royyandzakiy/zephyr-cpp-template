@@ -158,7 +158,7 @@ RUN chmod +x /usr/local/bin/ncs-ssh-key
 COPY <<'EOF' /usr/local/bin/ncs-ssh-setup
 #!/usr/bin/env bash
 set -eu
-HOST="${1:-bitbucket.org}"
+HOST="${1:-github.com}"
 ncs-ssh-key
 ssh-keyscan -t ed25519,rsa "$HOST" >> "${HOME}/.ssh/known_hosts" 2>/dev/null || true
 case "$HOST" in
@@ -183,11 +183,11 @@ RUN chmod +x /usr/local/bin/ncs-ssh-setup
 # Add a CUSTOM SDK from any git manifest repo into the volume and register it for
 # the extension. Run INSIDE the devcontainer terminal. For an SSH URL it first
 # runs ncs-ssh-setup for that host (acquire key -> open page -> confirm), then
-# clones — so a private repo (e.g. Bitbucket me/private-sdk-nrf) just works.
+# clones — so a private/forked SDK repo just works.
 COPY <<'EOF' /usr/local/bin/ncs-add-sdk
 #!/usr/bin/env bash
 # Usage: ncs-add-sdk <name> <git-url> [revision] [toolchain-version] [manifest-file]
-#   ncs-add-sdk private-sdk git@github.com:me/private-sdk-nrf.git main v3.3.0
+#   ncs-add-sdk my-sdk git@github.com:you/sdk-nrf-fork.git main v3.3.0
 set -eu
 NAME="${1:?usage: ncs-add-sdk <name> <git-url> [rev] [toolchainVer] [manifestFile]}"
 URL="${2:?usage: ncs-add-sdk <name> <git-url> [rev] [toolchainVer] [manifestFile]}"

@@ -7,7 +7,7 @@ dev-container template. Replaces the old per-task PowerShell scripts.
   python scripts/ncs.py build-image
   python scripts/ncs.py install-sdk v3.3.0
   python scripts/ncs.py install-custom-sdk my-sdk git@github.com:me/sdk-nrf.git --rev main
-  python scripts/ncs.py build  --sdk private-sdk --ncs v3.1.1
+  python scripts/ncs.py build  --sdk my-sdk --ncs v3.1.1
   python scripts/ncs.py shell  --ncs v3.3.0
   python scripts/ncs.py flash  --serial 1050073602
 

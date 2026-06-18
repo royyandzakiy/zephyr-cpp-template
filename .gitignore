@@ -8,3 +8,7 @@ twister-out/
 
 # signing key - private key must never be committed
 signing_key.pem
+
+# internal / company-private bits — never ship with the public template
+private/
+.devcontainer/setup-local.sh

@@ -19,7 +19,7 @@ in the nRF Connect for VS Code extension — exactly like a native install.
                  │ uses
                  ▼
 ┌─ ncs-sdks : Docker VOLUME  → /root/ncs ──┐   the SDK store. all versions +
-│  toolchains/  v3.3.0/  v3.2.4/  private-sdk/│   toolchains. shared, persistent.
+│  toolchains/  v3.3.0/  v3.2.4/  my-sdk/  │   toolchains. shared, persistent.
 └──────────────────────────────────────────┘
 ┌─ ncs-ssh  : Docker VOLUME  → /root/.ssh ─┐   your SSH key (add to Git host once).
 └──────────────────────────────────────────┘
@@ -80,7 +80,7 @@ So if the extension ever says **"SDK not configured"** or a version is missing:
 | `ncs-register-sdks` | Registers **every** west workspace in `/root/ncs` (official + custom, any folder name) into the CMake package registry so the extension lists them. Run automatically by `postStartCommand`. |
 | `ncs-ssh-key [--new]` | Ensures an SSH key exists and prints the **public** key. Reuses the existing key (persisted in the `ncs-ssh` volume); `--new` forces a fresh one. Run by `postCreateCommand`. |
 | `ncs-ssh-setup <host>` | **Guided** SSH authorization: ensure key → open the host's SSH-keys page in your browser → wait while you add it → verify `ssh -T`. Hosts: `bitbucket.org`, `github.com`, `gitlab.com`. |
-| `ncs-add-sdk <name> <git-url> [rev] [toolchain] [manifest-file]` | Installs any custom SDK from a git manifest repo into the volume and registers it. For an SSH URL it runs `ncs-ssh-setup` first. Run it in the devcontainer terminal. |
+| `ncs-add-sdk <custom-folder-name> <git-url> [branch] [toolchain] [manifest-file]` | Installs any custom SDK from a git manifest repo into the volume and registers it. For an SSH URL it runs `ncs-ssh-setup` first. Run it in the devcontainer terminal. |
 
 ### Host CLI — `scripts/ncs.py` (cross-platform: Linux / macOS / Windows)
 
@@ -100,7 +100,7 @@ Python is already required by the nRF/Zephyr ecosystem, so there's no new depend
 
 | File | Purpose |
 |---|---|
-| [.devcontainer/setup-local.sh](.devcontainer/setup-local.sh) | **Optional, private-only.** First-time setup of the private `me/private-sdk-nrf` fork. The devcontainer runs it only if present, so **deleting this file removes private support entirely** (no other change). Edit the `SDK_URL`/`SDK_REV`/`TOOLCHAIN` vars at the top to point at a different repo/branch. |
+| `.devcontainer/setup-local.sh` *(optional, gitignored)* | If present, the devcontainer runs it on creation — a hook for your own first-time setup (e.g. installing a private/forked SDK). Public copies don't ship one, so it's a no-op. |
 
 ---
 
@@ -144,7 +144,7 @@ VS Code → **Dev Containers: Rebuild and Reopen in Container**. On first creati
 
 - your SSH **public key** is printed in the creation log
   (View → *Dev Containers: Show Container Log*),
-- if `setup-local.sh` is present, you'll be told to run it (see below).
+- if a `.devcontainer/setup-local.sh` is present, it runs (your own hook).
 
 Then **nRF Connect → Add build configuration**: pick an **SDK version** and
 **toolchain** (e.g. `v3.3.0`), board `nrf5340dk/nrf5340/cpuapp`, and build.
@@ -160,7 +160,7 @@ west build -b nrf5340dk/nrf5340/cpuapp .
 ```bash
 python scripts/ncs.py build                          # v3.3.0, nRF5340 DK
 python scripts/ncs.py build --ncs v3.2.4
-python scripts/ncs.py build --sdk private-sdk --ncs v3.1.1   # custom SDK + its toolchain
+python scripts/ncs.py build --sdk my-sdk --ncs v3.1.1   # custom SDK + its toolchain
 ```
 
 ### Switch SDK versions
@@ -181,18 +181,16 @@ ncs-add-sdk my-sdk git@github.com:me/sdk-nrf-fork.git my-branch v3.3.0
 Use the git **clone** URL (not the browser `/src/...` URL). After it finishes:
 **Refresh SDKs** → it appears as `my-sdk` in *Add build configuration*.
 
-### private SDK (internal)
+### Optional: a local first-time setup hook
 
-`.devcontainer/setup-local.sh` is pre-wired for `me/private-sdk-nrf` (branch
-`main`, toolchain `v3.1.1`). On first open you'll be prompted; in the
-terminal run:
+If a file `.devcontainer/setup-local.sh` exists, the devcontainer runs it on
+creation (it's gitignored, so it never ships publicly). Use it to automate your
+own first-time setup — e.g. installing a private/forked SDK — without touching
+the template. Public copies don't include one, so the hook is a no-op.
 
-```bash
-nrfutil toolchain-manager install --ncs-version v3.1.1   # once, if not installed
-bash .devcontainer/setup-local.sh                           # SSH key → Bitbucket → clone
-```
-Don't need it? **Delete `.devcontainer/setup-local.sh`** — the devcontainer simply
-skips it.
+A self-contained script would, for example, call `ncs-add-sdk` to install a
+private SDK fork. To make one run automatically, drop it at
+`.devcontainer/setup-local.sh` and rebuild the container.
 
 ---
 
@@ -300,7 +298,7 @@ the UART console, open the J-Link VCOM port in a serial terminal.
 | `Dockerfile` | Builds `ncs-base` (host tools + nrfutil + the `ncs-*` helper commands). |
 | `.dockerignore` | Keeps the image build context empty (no SDK, no source). |
 | `.devcontainer/devcontainer.json` | Image ref, volume mounts, workspace bind, extension list, the `installDirectory` setting, `postCreate`/`postStart` commands. |
-| `.devcontainer/setup-local.sh` | Optional, deletable private first-time SDK setup. |
+| `.devcontainer/setup-local.sh` | *(optional, gitignored)* your own first-time setup hook — absent in public copies. |
 | `CMakeLists.txt`, `prj.conf`, `src/main.cpp` | The freestanding C++23 app. |
 | `sample.yaml` | Twister build test (`west twister -T .`). |
 | `debug-overlay.conf` | Extra debug Kconfig (`-DEXTRA_CONF_FILE=...`). |
@@ -314,6 +312,7 @@ the UART console, open the J-Link VCOM port in a serial terminal.
 
 1. Copy the whole folder to a new name.
 2. (Optional) rename `project()` in `CMakeLists.txt`.
-3. Don't need private? Delete `.devcontainer/setup-local.sh`.
+3. (Optional) for private/internal setup, drop a `.devcontainer/setup-local.sh`
+   (gitignored) — see "Optional: a local first-time setup hook" in §4.
 4. **Reopen in Container.** It attaches to the same `ncs-base` image and the same
    `ncs-sdks` volume — no SDK re-download. Pick an SDK in the extension and build.
