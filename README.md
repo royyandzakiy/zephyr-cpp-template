@@ -82,16 +82,19 @@ So if the extension ever says **"SDK not configured"** or a version is missing:
 | `ncs-ssh-setup <host>` | **Guided** SSH authorization: ensure key → open the host's SSH-keys page in your browser → wait while you add it → verify `ssh -T`. Hosts: `bitbucket.org`, `github.com`, `gitlab.com`. |
 | `ncs-add-sdk <name> <git-url> [rev] [toolchain] [manifest-file]` | Installs any custom SDK from a git manifest repo into the volume and registers it. For an SSH URL it runs `ncs-ssh-setup` first. Run it in the devcontainer terminal. |
 
-### Host PowerShell scripts (`scripts/`) — for use *without* VS Code
+### Host CLI — `scripts/ncs.py` (cross-platform: Linux / macOS / Windows)
 
-| Script | Purpose |
+One Python CLI for everything host-side (`python scripts/ncs.py <cmd> -h` for details).
+Python is already required by the nRF/Zephyr ecosystem, so there's no new dependency.
+
+| Command | Purpose |
 |---|---|
-| `build-image.ps1 [-NcsRev v3.3.0]` | Build/refresh the `ncs-base` image. Run once. |
-| `install-sdk.ps1 -NcsRev v3.3.0` | Install an **official** NCS version (SDK + matching toolchain) into the volume via `nrfutil sdk-manager`. `-List` to see what's available/installed. |
-| `install-custom-sdk.ps1 -Name … -ManifestUrl … [-Rev …] [-ToolchainVer …]` | Install a **custom** SDK via `west` from the host (works for public repos; private repos need the in-container `ncs-add-sdk` which has the SSH key). |
-| `shell.ps1 [-NcsRev v3.3.0] [-Sdk <folder>]` | Interactive shell with this project mounted and `ZEPHYR_BASE` set. |
-| `build.ps1 [-NcsRev v3.3.0] [-Sdk <folder>] [-Board …] [-Pristine]` | Headless build. `-NcsRev` = toolchain; `-Sdk` = which SDK folder (defaults to `-NcsRev`). |
-| `flash.ps1 [-SerialNumber …] [-Hex …]` | Flash the built `.hex` from the **host** via `nrfutil device` (reliable on Windows — see §6). |
+| `build-image` | Build/refresh the `ncs-base` image and ensure the SDK volume. Run once. |
+| `install-sdk v3.3.0` | Install an **official** NCS version (SDK + matching toolchain) into the volume via `nrfutil sdk-manager`. `--list` shows available/installed. |
+| `install-custom-sdk <name> <git-url> [--rev …] [--toolchain …]` | Install a **custom** SDK via `west` from the host (public repos; private repos need the in-container `ncs-add-sdk`, which has the SSH key). |
+| `shell [--ncs v3.3.0] [--sdk <folder>]` | Interactive shell with this project mounted and `ZEPHYR_BASE` set. |
+| `build [--ncs v3.3.0] [--sdk <folder>] [--board …] [--pristine]` | Headless build. `--ncs` = toolchain; `--sdk` = which SDK folder (defaults to `--ncs`). |
+| `flash [--serial …] [--hex …]` | Flash the built `.hex` from the **host** via `nrfutil device` (J-Link) — see §6. |
 
 ### Optional project file
 
@@ -105,13 +108,13 @@ So if the extension ever says **"SDK not configured"** or a version is missing:
 
 ### One-time, on this machine
 
-```powershell
-# 1. Build the small base image
-./scripts/build-image.ps1
+```bash
+# 1. Build the small base image (+ create the SDK volume)
+python scripts/ncs.py build-image
 
 # 2. Install at least one official SDK version into the shared volume
-./scripts/install-sdk.ps1 -NcsRev v3.3.0
-./scripts/install-sdk.ps1 -NcsRev v3.2.4    # add as many as you like
+python scripts/ncs.py install-sdk v3.3.0
+python scripts/ncs.py install-sdk v3.2.4    # add as many as you like
 ```
 
 ### Open the project
@@ -133,10 +136,10 @@ west build -b nrf5340dk/nrf5340/cpuapp .
 
 ### Build headless (no VS Code)
 
-```powershell
-./scripts/build.ps1                         # v3.3.0, nRF5340 DK
-./scripts/build.ps1 -NcsRev v3.2.4
-./scripts/build.ps1 -Sdk private-sdk -NcsRev v3.1.1   # custom SDK + its toolchain
+```bash
+python scripts/ncs.py build                          # v3.3.0, nRF5340 DK
+python scripts/ncs.py build --ncs v3.2.4
+python scripts/ncs.py build --sdk private-sdk --ncs v3.1.1   # custom SDK + its toolchain
 ```
 
 ### Switch SDK versions
@@ -242,18 +245,18 @@ it in the nRF Connect serial terminal (the nRF5340 DK app-core console is usuall
 > `.wslconfig`'s `kernel=` at it. (You do **not** need to reinstall your distro —
 > the kernel is shared across all WSL2 distros + Docker, independent of any distro.)
 
-### From the Windows host (fallback / simplest)
+### From the host (fallback / simplest)
 
 If you'd rather not juggle `usbipd` (you can't use the probe on Windows and in
 WSL at the same time), build in the container and flash from the host:
 
-```powershell
-./scripts/flash.ps1                            # picks build\merged.hex
-./scripts/flash.ps1 -SerialNumber 1050073602   # if more than one probe
+```bash
+python scripts/ncs.py flash                       # picks build/merged.hex
+python scripts/ncs.py flash --serial 1050073602   # if more than one probe
 ```
 That runs the host's `nrfutil device program` against the `.hex` in the
-bind-mounted `build/` folder. For the console, open the J-Link VCOM COM port in a
-Windows serial terminal.
+bind-mounted `build/` folder (needs `nrfutil` + J-Link drivers on the host). For
+the UART console, open the J-Link VCOM port in a serial terminal.
 
 ---
 
@@ -268,7 +271,7 @@ Windows serial terminal.
 | `CMakeLists.txt`, `prj.conf`, `src/main.cpp` | The freestanding C++23 app. |
 | `sample.yaml` | Twister build test (`west twister -T .`). |
 | `debug-overlay.conf` | Extra debug Kconfig (`-DEXTRA_CONF_FILE=...`). |
-| `scripts/*.ps1` | Host-side build/install helpers (see §3). |
+| `scripts/ncs.py` | Cross-platform host CLI: build/install/shell/flash (see §3). |
 | `.clang-format`, `.clang-tidy`, `.cmake-format.yaml`, `.vscode/settings.json` | Formatting/lint/IntelliSense config. |
 | `.gitattributes` | Forces `*.sh` to LF (they run in Linux). |
 

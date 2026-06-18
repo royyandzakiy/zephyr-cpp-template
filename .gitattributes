@@ -1,2 +1,4 @@
 # Shell scripts must stay LF — they run inside the Linux container.
 *.sh text eol=lf
+# Python helpers run on Linux/macOS too; keep LF so the shebang works.
+*.py text eol=lf
