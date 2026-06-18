@@ -43,6 +43,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates curl wget git openssh-client \
       python3 python3-venv \
       file xz-utils libusb-1.0-0 \
+      usbutils \
     && rm -rf /var/lib/apt/lists/*
 
 # --- nrfutil + the commands the extension uses ------------------------------
