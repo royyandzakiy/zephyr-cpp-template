@@ -40,7 +40,7 @@ ENV NCS_INSTALL_DIR=/root/ncs
 # nrfutil's toolchain bundles ship their own cmake/ninja/python/west, so we
 # only need a lean host layer (git for west, libusb for tooling, certs, etc.).
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      ca-certificates curl wget git \
+      ca-certificates curl wget git openssh-client \
       python3 python3-venv \
       file xz-utils libusb-1.0-0 \
     && rm -rf /var/lib/apt/lists/*
@@ -91,6 +91,38 @@ done
 echo "ncs-register-sdks: registered ${count} SDK(s) for the nRF Connect extension"
 EOF
 RUN chmod +x /usr/local/bin/ncs-register-sdks
+
+# Generate a fresh SSH key and print the PUBLIC key in the setup log. Generic
+# (any Git host), never prompts, and always regenerates — so cloning private
+# repos (e.g. a private custom-SDK manifest via install-custom-sdk.ps1, or
+# `west update` over SSH) works once you add the printed key to your Git host.
+# Run on container creation (postCreateCommand).
+COPY <<'EOF' /usr/local/bin/ncs-setup-ssh
+#!/usr/bin/env bash
+set -eu
+KEY="${HOME}/.ssh/id_ed25519"
+mkdir -p "${HOME}/.ssh"
+chmod 700 "${HOME}/.ssh"
+# Always regenerate a new key, no prompt, no passphrase.
+rm -f "$KEY" "${KEY}.pub"
+ssh-keygen -t ed25519 -C "ncs-devcontainer" -f "$KEY" -N "" -q
+chmod 600 "$KEY"
+chmod 644 "${KEY}.pub"
+# Pre-trust common hosts so the first clone doesn't block on host-key prompts.
+ssh-keyscan -t ed25519 github.com gitlab.com bitbucket.org >> "${HOME}/.ssh/known_hosts" 2>/dev/null || true
+echo ""
+echo "=================================================================="
+echo "  SSH PUBLIC KEY (freshly generated for this container)"
+echo "  Add it to your Git host to clone private repos over SSH:"
+echo "    GitHub    https://github.com/settings/ssh/new"
+echo "    GitLab    https://gitlab.com/-/user_settings/ssh_keys"
+echo "    Bitbucket https://bitbucket.org/account/settings/ssh-keys/"
+echo "------------------------------------------------------------------"
+cat "${KEY}.pub"
+echo "=================================================================="
+echo ""
+EOF
+RUN chmod +x /usr/local/bin/ncs-setup-ssh
 
 WORKDIR /workspaces
 CMD ["bash"]

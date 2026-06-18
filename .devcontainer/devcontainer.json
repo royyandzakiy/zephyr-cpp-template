@@ -19,6 +19,11 @@
     "source=ncs-sdks,target=/root/ncs,type=volume"
   ],
 
+  // On container creation: generate a fresh SSH key and print its PUBLIC key in
+  // the creation log (View → "Dev Containers: Show Container Log"). Add it to
+  // your Git host to clone private repos / private custom-SDK manifests.
+  "postCreateCommand": "ncs-setup-ssh",
+
   // Register the volume's SDKs in the CMake user package registry on every
   // start. The extension discovers SDKs from ~/.cmake/packages/Zephyr (not from
   // the install dir), and that path is ephemeral — so without this, "Add build
