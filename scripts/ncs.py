@@ -26,6 +26,7 @@ PROJECT = ROOT.name
 DEST = f"/workspaces/{PROJECT}"               # where the project mounts in-container
 IMAGE = "ncs-base:latest"
 VOLUME = "ncs-sdks"
+SSH_VOLUME = "ncs-ssh"     # same key the devcontainer uses (persisted)
 NCS_DIR = "/root/ncs"
 PLATFORM = "linux/amd64"   # x86_64 tooling; emulated on Apple Silicon / arm64
 
@@ -36,13 +37,15 @@ def run(cmd, **kw):
     return subprocess.run(cmd, check=True, **kw)
 
 
-def docker_run(args, *, interactive=False, with_project=False):
+def docker_run(args, *, interactive=False, with_project=False, with_ssh=False):
     """Assemble a `docker run` invocation against the shared SDK volume."""
     cmd = ["docker", "run", "--rm", "--platform", PLATFORM]
     if interactive:
         tty = sys.stdin.isatty() and sys.stdout.isatty()
         cmd += ["-it"] if tty else ["-i"]
     cmd += ["-v", f"{VOLUME}:{NCS_DIR}"]
+    if with_ssh:
+        cmd += ["-v", f"{SSH_VOLUME}:/root/.ssh"]   # key for private git clones
     if with_project:
         cmd += ["-v", f"{ROOT}:{DEST}"]
     cmd += [IMAGE] + args
@@ -78,6 +81,15 @@ def cmd_install_sdk(a):
     print(f"\nInstalled NCS {a.ncs_rev} into volume '{VOLUME}'.")
 
 
+def cmd_install_toolchain(a):
+    # Toolchain only (no SDK sources). Needed before a custom SDK based on an
+    # NCS version you don't already have a toolchain for. Install dir is the
+    # one baked into the image config (the volume), so just pass --ncs-version.
+    docker_run(["bash", "-lc",
+                f"nrfutil toolchain-manager install --ncs-version {shlex.quote(a.ncs_rev)}"])
+    print(f"\nInstalled toolchain for {a.ncs_rev} into volume '{VOLUME}'.")
+
+
 def cmd_install_custom_sdk(a):
     dest = f"{NCS_DIR}/{a.name}"
     init = f"west init -m {shlex.quote(a.url)}"
@@ -87,14 +99,17 @@ def cmd_install_custom_sdk(a):
         init += f" --mf {shlex.quote(a.manifest_file)}"
     init += f" {shlex.quote(dest)}"
 
-    steps = [init, f"cd {shlex.quote(dest)}", "west update"]
+    # accept-new lets the first clone of a new host proceed without a prompt;
+    # the SSH key comes from the mounted ncs-ssh volume (with_ssh below).
+    steps = ["export GIT_SSH_COMMAND='ssh -o StrictHostKeyChecking=accept-new'",
+             init, f"cd {shlex.quote(dest)}", "west update"]
     if a.blobs:
         steps.append("west blobs fetch hal_nordic || true")
     steps.append("west zephyr-export")
     inner = " && ".join(steps)
 
     print(f"Installing custom SDK '{a.name}' from {a.url} (toolchain env: {a.toolchain})...")
-    docker_run(launch(a.toolchain, inner))
+    docker_run(launch(a.toolchain, inner), with_ssh=True)
     print(f"\nInstalled custom SDK '{a.name}' into '{VOLUME}' at {dest}.")
     print(f"In the extension: Add build configuration -> SDK = '{a.name}', Toolchain = {a.toolchain}.")
     print(f"Headless build:   python scripts/ncs.py build --sdk {a.name} --ncs {a.toolchain}")
@@ -160,6 +175,10 @@ def main():
     sp.add_argument("ncs_rev", nargs="?", default="v3.3.0", help="e.g. v3.3.0 (default)")
     sp.add_argument("--list", action="store_true", help="List available/installed instead")
     sp.set_defaults(func=cmd_install_sdk)
+
+    sp = sub.add_parser("install-toolchain", help="Install just a toolchain for an NCS version")
+    sp.add_argument("ncs_rev", help="e.g. v3.0.2")
+    sp.set_defaults(func=cmd_install_toolchain)
 
     sp = sub.add_parser("install-custom-sdk", help="Install a custom SDK from any git manifest")
     sp.add_argument("name", help="Folder name under the volume, e.g. my-sdk")
