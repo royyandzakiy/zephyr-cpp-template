@@ -92,37 +92,100 @@ echo "ncs-register-sdks: registered ${count} SDK(s) for the nRF Connect extensio
 EOF
 RUN chmod +x /usr/local/bin/ncs-register-sdks
 
-# Generate a fresh SSH key and print the PUBLIC key in the setup log. Generic
-# (any Git host), never prompts, and always regenerates — so cloning private
-# repos (e.g. a private custom-SDK manifest via install-custom-sdk.ps1, or
-# `west update` over SSH) works once you add the printed key to your Git host.
-# Run on container creation (postCreateCommand).
-COPY <<'EOF' /usr/local/bin/ncs-setup-ssh
+# ncs-ssh-key: ensure an SSH key exists and print its PUBLIC part. REUSES the
+# existing key (the ~/.ssh dir is persisted in the ncs-ssh volume), so once you
+# add it to your Git host it keeps working across rebuilds. Pass --new to force
+# a fresh key. Non-interactive — safe for postCreateCommand.
+COPY <<'EOF' /usr/local/bin/ncs-ssh-key
 #!/usr/bin/env bash
 set -eu
 KEY="${HOME}/.ssh/id_ed25519"
 mkdir -p "${HOME}/.ssh"
 chmod 700 "${HOME}/.ssh"
-# Always regenerate a new key, no prompt, no passphrase.
-rm -f "$KEY" "${KEY}.pub"
-ssh-keygen -t ed25519 -C "ncs-devcontainer" -f "$KEY" -N "" -q
-chmod 600 "$KEY"
-chmod 644 "${KEY}.pub"
-# Pre-trust common hosts so the first clone doesn't block on host-key prompts.
-ssh-keyscan -t ed25519 github.com gitlab.com bitbucket.org >> "${HOME}/.ssh/known_hosts" 2>/dev/null || true
-echo ""
+[ "${1:-}" = "--new" ] && rm -f "$KEY" "${KEY}.pub"
+if [ ! -f "$KEY" ]; then
+	ssh-keygen -t ed25519 -C "ncs-devcontainer" -f "$KEY" -N "" -q
+fi
+chmod 600 "$KEY" 2>/dev/null || true
+chmod 644 "${KEY}.pub" 2>/dev/null || true
 echo "=================================================================="
-echo "  SSH PUBLIC KEY (freshly generated for this container)"
-echo "  Add it to your Git host to clone private repos over SSH:"
-echo "    GitHub    https://github.com/settings/ssh/new"
-echo "    GitLab    https://gitlab.com/-/user_settings/ssh_keys"
-echo "    Bitbucket https://bitbucket.org/account/settings/ssh-keys/"
+echo "  SSH PUBLIC KEY — add it to your Git host to clone private repos:"
 echo "------------------------------------------------------------------"
 cat "${KEY}.pub"
 echo "=================================================================="
-echo ""
 EOF
-RUN chmod +x /usr/local/bin/ncs-setup-ssh
+RUN chmod +x /usr/local/bin/ncs-ssh-key
+
+# ncs-ssh-setup <host>: guided authorization. Ensures a key, opens the host's
+# SSH-keys page in your browser ($BROWSER is wired to the host by VS Code), then
+# loops verifying `ssh -T` until the key is accepted. Run it in the terminal.
+#   ncs-ssh-setup bitbucket.org   (also: github.com, gitlab.com)
+COPY <<'EOF' /usr/local/bin/ncs-ssh-setup
+#!/usr/bin/env bash
+set -eu
+HOST="${1:-bitbucket.org}"
+ncs-ssh-key
+ssh-keyscan -t ed25519,rsa "$HOST" >> "${HOME}/.ssh/known_hosts" 2>/dev/null || true
+case "$HOST" in
+	bitbucket.org) URL="https://bitbucket.org/account/settings/ssh-keys/" ;;
+	github.com)    URL="https://github.com/settings/ssh/new" ;;
+	gitlab.com)    URL="https://gitlab.com/-/user_settings/ssh_keys" ;;
+	*)             URL="" ;;
+esac
+if [ -n "$URL" ]; then
+	echo "Opening ${URL} ..."
+	"${BROWSER:-xdg-open}" "$URL" >/dev/null 2>&1 || echo "  (open it manually: $URL)"
+fi
+authed() { ssh -o StrictHostKeyChecking=accept-new -T "git@${HOST}" 2>&1 | grep -qiE "authenticat|welcome to gitlab|logged in"; }
+while ! authed; do
+	printf 'Add the key above to %s, then press Enter to re-check (Ctrl-C to abort)... ' "$HOST"
+	read -r _ || { echo "aborted"; exit 1; }
+done
+echo "SSH to ${HOST} works — you can clone private repos now."
+EOF
+RUN chmod +x /usr/local/bin/ncs-ssh-setup
+
+# Add a CUSTOM SDK from any git manifest repo into the volume and register it for
+# the extension. Run INSIDE the devcontainer terminal. For an SSH URL it first
+# runs ncs-ssh-setup for that host (acquire key -> open page -> confirm), then
+# clones — so a private repo (e.g. Bitbucket me/private-sdk-nrf) just works.
+COPY <<'EOF' /usr/local/bin/ncs-add-sdk
+#!/usr/bin/env bash
+# Usage: ncs-add-sdk <name> <git-url> [revision] [toolchain-version] [manifest-file]
+#   ncs-add-sdk private-sdk git@github.com:me/private-sdk-nrf.git main v3.3.0
+set -eu
+NAME="${1:?usage: ncs-add-sdk <name> <git-url> [rev] [toolchainVer] [manifestFile]}"
+URL="${2:?usage: ncs-add-sdk <name> <git-url> [rev] [toolchainVer] [manifestFile]}"
+REV="${3:-}"
+TCV="${4:-v3.3.0}"
+MF="${5:-}"
+NCS_DIR="${NCS_INSTALL_DIR:-/root/ncs}"
+DEST="${NCS_DIR}/${NAME}"
+
+if [ -e "$DEST" ]; then
+	echo "ncs-add-sdk: '$DEST' already exists — remove it or pick another name." >&2
+	exit 1
+fi
+
+# Over SSH? Make sure SSH to that host is authorized first (guided).
+case "$URL" in
+	git@*:*) host="${URL#git@}"; host="${host%%:*}"; ncs-ssh-setup "$host" ;;
+esac
+
+INIT="west init -m \"$URL\""
+[ -n "$REV" ] && INIT="$INIT --mr \"$REV\""
+[ -n "$MF" ]  && INIT="$INIT --mf \"$MF\""
+INIT="$INIT \"$DEST\""
+
+echo "ncs-add-sdk: installing '$NAME' from $URL (rev=${REV:-default}, toolchain=$TCV)"
+nrfutil toolchain-manager launch --ncs-version "$TCV" -- bash -lc \
+	"$INIT && cd \"$DEST\" && west update && west zephyr-export"
+
+ncs-register-sdks
+echo "ncs-add-sdk: done. In the extension: Refresh SDKs, then Add build configuration"
+echo "             with SDK='$NAME' and Toolchain=$TCV."
+EOF
+RUN chmod +x /usr/local/bin/ncs-add-sdk
 
 WORKDIR /workspaces
 CMD ["bash"]

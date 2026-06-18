@@ -16,13 +16,21 @@
   // trick: the extension's "Manage SDKs" UI and the install-sdk.ps1 script both
   // write here, into the volume, so versions persist and both tools see them.
   "mounts": [
-    "source=ncs-sdks,target=/root/ncs,type=volume"
+    "source=ncs-sdks,target=/root/ncs,type=volume",
+    // Persist ~/.ssh so the key survives rebuilds — add it to your Git host once.
+    "source=ncs-ssh,target=/root/.ssh,type=volume"
   ],
 
-  // On container creation: generate a fresh SSH key and print its PUBLIC key in
-  // the creation log (View → "Dev Containers: Show Container Log"). Add it to
-  // your Git host to clone private repos / private custom-SDK manifests.
-  "postCreateCommand": "ncs-setup-ssh",
+  // On container creation: ensure an SSH key exists and print its PUBLIC key in
+  // the creation log (View → "Dev Containers: Show Container Log"). For the
+  // guided flow (open the host's key page + verify the connection), run
+  // `ncs-ssh-setup bitbucket.org` in the terminal — `ncs-add-sdk` does this
+  // automatically for SSH URLs.
+  //
+  // The trailing clause runs the OPTIONAL private first-time SDK setup ONLY if
+  // .devcontainer/setup-local.sh exists. Delete that file to drop private support
+  // entirely — no change here needed.
+  "postCreateCommand": "ncs-ssh-key; if [ -f .devcontainer/setup-local.sh ]; then bash .devcontainer/setup-local.sh; fi",
 
   // Register the volume's SDKs in the CMake user package registry on every
   // start. The extension discovers SDKs from ~/.cmake/packages/Zephyr (not from
