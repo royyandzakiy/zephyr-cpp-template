@@ -33,9 +33,11 @@
     "source=ncs-sdks,target=/root/ncs,type=volume",
     // Persist ~/.ssh so the key survives rebuilds — add it to your Git host once.
     "source=ncs-ssh,target=/root/.ssh,type=volume",
-    // USB bus so libusb (J-Link) sees the forwarded probe. Live with the host VM,
-    // so a probe attached via `usbipd attach` after start still shows up.
-    "source=/dev/bus/usb,target=/dev/bus/usb,type=bind"
+    // Whole host /dev (live), so the container sees BOTH the J-Link's libusb
+    // device (/dev/bus/usb — flashing/RTT) AND its UART VCOM nodes (/dev/ttyACM*
+    // — serial console). Live bind, so a probe attached via `usbipd attach`
+    // after start still appears. See README §6 for the cdc_acm/usbipd steps.
+    "source=/dev,target=/dev,type=bind"
   ],
 
   // On container creation: ensure an SSH key exists and print its PUBLIC key in

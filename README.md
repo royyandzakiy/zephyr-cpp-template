@@ -211,7 +211,7 @@ port needs a custom kernel — and **RTT replaces it**, so you don't need one.
    usbipd list                          # find the J-Link BUSID
    usbipd attach --wsl --busid <BUSID>
    ```
-2. The devcontainer already has `--privileged` + `/dev/bus/usb` (see
+2. The devcontainer has `--privileged` + a whole-`/dev` bind (see
    `devcontainer.json` §`runArgs`/`mounts`), and the image bundles the **SEGGER
    J-Link runtime** (`libjlinkarm`) that `nrfutil device` needs — so the probe is
    both reachable *and* drivable. (Without that runtime you'd see "JLinkARM DLL
@@ -220,14 +220,27 @@ port needs a custom kernel — and **RTT replaces it**, so you don't need one.
    ```bash
    west flash -d build
    ```
-4. **Monitor**: use **RTT**, not the serial terminal — *nRF Connect: Connect to
-   RTT* (or the RTT button on the build). RTT goes over the debug probe, so it
-   needs no `/dev/ttyACM` and no `cdc_acm`.
+4. **Monitor — RTT (simplest)**: *nRF Connect: Connect to RTT* (or the RTT button
+   on the build). RTT goes over the debug probe, so it needs nothing else.
 
-> The earlier `cannot open /dev/ttyACM1` error was the extension's *serial*
-> monitor; switch the monitor to **RTT** and it's irrelevant. A custom WSL2
-> kernel with `cdc_acm` is only worth building if you specifically need the UART
-> VCOM instead of RTT.
+#### Monitor over the UART VCOM (`/dev/ttyACM*`) instead of RTT
+
+Only needed if you want the actual UART console (MCUboot serial recovery, a UART
+shell, or firmware that logs only to UART). It needs the `cdc_acm` kernel module —
+recent WSL2 kernels ship it. One-time per WSL session, **before** attaching:
+
+```powershell
+wsl -d <your-distro> -- sudo modprobe cdc_acm   # load it (kernel-global)
+usbipd attach --wsl --busid <BUSID>             # node /dev/ttyACM* now appears
+```
+The whole-`/dev` mount means the container sees `/dev/ttyACM*` automatically. Open
+it in the nRF Connect serial terminal (the nRF5340 DK app-core console is usually
+**VCOM1 / `/dev/ttyACM1`**) at 115200, or `screen /dev/ttyACM1 115200`.
+
+> If `modprobe cdc_acm` reports the module isn't found, your WSL2 kernel lacks it —
+> run `wsl --update`, or build a custom kernel with `CONFIG_USB_ACM=y` and point
+> `.wslconfig`'s `kernel=` at it. (You do **not** need to reinstall your distro —
+> the kernel is shared across all WSL2 distros + Docker, independent of any distro.)
 
 ### From the Windows host (fallback / simplest)
 
