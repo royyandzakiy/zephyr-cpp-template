@@ -27,15 +27,13 @@ constexpr auto BLINK_INTERVAL = 1000ms;
 // led0 is defined for nrf5340dk in the in-tree board devicetree.
 const gpio_dt_spec led = GPIO_DT_SPEC_GET(DT_ALIAS(led0), gpios);
 
-inline void zephyr_sleep_for(std::chrono::milliseconds duration)
-{
+inline void zephyr_sleep_for(std::chrono::milliseconds duration) {
 	k_msleep(duration.count());
 }
 
 } // namespace
 
-extern "C" int main(void)
-{
+extern "C" int main(void) {
 	if (!gpio_is_ready_dt(&led)) {
 		LOG_ERR("LED device %s is not ready", led.port->name);
 		return -1;

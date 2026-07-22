@@ -50,7 +50,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       python3 python3-venv \
       file xz-utils libusb-1.0-0 \
       usbutils \
+      iwyu \
     && rm -rf /var/lib/apt/lists/*
+
+# NCS v2.4.0's bundled git links against libunistring.so.2, but Ubuntu 24.04
+# (noble) ships libunistring.so.5. Symlink so the old toolchain's git can load it.
+RUN ln -sf /usr/lib/x86_64-linux-gnu/libunistring.so.5 \
+           /usr/lib/x86_64-linux-gnu/libunistring.so.2
 
 # --- nrfutil + the commands the extension uses ------------------------------
 RUN curl -fsSL \
