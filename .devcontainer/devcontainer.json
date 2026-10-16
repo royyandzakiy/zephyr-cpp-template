@@ -12,7 +12,7 @@
 
   // --privileged claims the J-Link over libusb; SYS_PTRACE + unconfined seccomp
   // are for on-target debugging. On Windows, forward the probe first with
-  // `usbipd attach --wsl --busid <id>` (see README).
+  // `usbipd attach --wsl --busid <id>` (see docs/setup/flash-monitor.md).
   "runArgs": [
     "--platform=linux/amd64",
     "--privileged",

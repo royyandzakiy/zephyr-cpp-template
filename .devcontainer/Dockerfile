@@ -1,50 +1,26 @@
 # syntax=docker/dockerfile:1
 
-###############################################################################
-# ncs-base : a SMALL, version-agnostic nRF Connect SDK build image.
+# ncs-base: a small, version-agnostic Zephyr / nRF Connect SDK build image.
 #
-# This image contains ONLY the host tools + nrfutil. It does NOT contain any
-# SDK. The actual nRF Connect SDK versions + their matching toolchains are
-# installed by nrfutil into a Docker *volume* mounted at /root/ncs, so:
+# Holds host tools and nrfutil only, no SDK. SDKs and toolchains go into a Docker
+# volume mounted at /root/ncs, so the image rarely changes, many SDK versions sit side
+# by side, and every project shares them. See docs/setup/devcontainer.md.
 #
-#   * the image stays small and rarely changes
-#   * many SDK versions live side-by-side in the volume (like your C:\ncs)
-#   * you add/remove versions with nrfutil -- no image rebuild
-#   * every project + every container shares the one volume
-#
-# The layout produced in the volume mirrors a native Nordic install, which is
-# exactly what the nRF Connect for VS Code extension auto-discovers:
-#
-#   /root/ncs/
-#   ├── toolchains/<bundle>/      (one toolchain per version)
-#   ├── v3.3.0/                   (full west workspace)
-#   └── v3.2.x/ ...
-#
-#   Build once:   docker build -t ncs-base:latest .
-###############################################################################
-
-# Build this image for amd64: nrfutil, the Zephyr SDK toolchains, and SEGGER
-# J-Link are all x86_64. ALWAYS build with `--platform=linux/amd64` (the
-# `ncs.py build-image` command and the devcontainer do this). On Apple Silicon /
-# arm64 Linux it then runs under emulation (Docker Desktop Rosetta / qemu) —
-# slower, but identical across hosts. (Platform is set at build time, not in
-# FROM, to satisfy BuildKit's lint.)
+# Build for amd64 (nrfutil, the Zephyr SDK and J-Link are x86_64 only):
+#   docker build --platform=linux/amd64 -t ncs-base:latest .devcontainer
+# Apple Silicon and arm64 Linux then run it under emulation. The platform is passed at
+# build time rather than in FROM, which BuildKit's lint rejects.
 FROM ubuntu:24.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Where nrfutil installs SDKs + toolchains. This path is the Docker volume
-# mount point; the extension is pointed here too.
-# IMPORTANT: this must match the nRF Connect VS Code extension's own SDK install
-# directory, which defaults to ~/ncs (= /root/ncs for the root user). The
-# extension ignores nrfutil's configured install-dir and uses this path, so we
-# align everything here: the volume is mounted at /root/ncs, the scripts install
-# here, and the extension installs here too — one shared store, no copying.
+# The SDK store. Must be /root/ncs, the nRF Connect extension's own install dir (~/ncs),
+# which it uses regardless of nrfutil's config. Change it together with the volume
+# mount and installDirectory in devcontainer.json.
 ENV NCS_INSTALL_DIR=/root/ncs
 
-# --- Minimal host dependencies ----------------------------------------------
-# nrfutil's toolchain bundles ship their own cmake/ninja/python/west, so we
-# only need a lean host layer (git for west, libusb for tooling, certs, etc.).
+# nrfutil's toolchain bundles ship their own cmake, ninja, python and west, so the
+# host layer only needs git, libusb and the basics.
 RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates curl wget git openssh-client \
       python3 python3-venv \
@@ -58,7 +34,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN ln -sf /usr/lib/x86_64-linux-gnu/libunistring.so.5 \
            /usr/lib/x86_64-linux-gnu/libunistring.so.2
 
-# --- nrfutil + the commands the extension uses ------------------------------
+# nrfutil plus the sub-commands the extension uses.
 RUN curl -fsSL \
       https://files.nordicsemi.com/artifactory/swtools/external/nrfutil/executables/x86_64-unknown-linux-gnu/nrfutil \
       -o /usr/local/bin/nrfutil \
@@ -67,16 +43,12 @@ RUN curl -fsSL \
     && nrfutil install sdk-manager \
     && nrfutil install device || true
 
-# --- SEGGER J-Link software --------------------------------------------------
-# `nrfutil device` needs SEGGER's libjlinkarm to program/debug over a J-Link;
-# without it you get "JLinkARM DLL not found" and flashing fails with
-# "operation not available / Unable to find a board".
-#
-# We use the headless .tgz (the .deb hard-depends on Qt4, absent on Ubuntu 24.04).
-# CARE: the tarball ships BOTH 64-bit and 32-bit libjlinkarm with the SAME soname
-# (libjlinkarm.so.9). Running `ldconfig` over its dir picks the 32-bit one and
-# breaks loading on a 64-bit host. So we instead force the in-dir symlink to the
-# 64-bit lib and register *only* that in an isolated dir.
+# SEGGER J-Link runtime: `nrfutil device` needs libjlinkarm to flash or debug, and
+# fails with "JLinkARM DLL not found" without it. Uses the headless .tgz, since the
+# .deb depends on Qt4, which Ubuntu 24.04 does not ship.
+# The tarball ships 64-bit and 32-bit libs under the same soname, and ldconfig over
+# its dir picks the 32-bit one, which then fails to load. So only the 64-bit lib is
+# registered, from a dir of its own.
 RUN curl -fsSL -X POST \
       -d "accept_license_agreement=accepted" -d "submit=Download software" \
       https://www.segger.com/downloads/jlink/JLink_Linux_x86_64.tgz -o /tmp/jlink.tgz \
@@ -94,25 +66,19 @@ RUN curl -fsSL -X POST \
     && rm -f /tmp/jlink.tgz
 ENV PATH="/opt/SEGGER/JLink:${PATH}"
 
-# Point both nrfutil managers at the volume mount path, so the install-sdk.ps1
-# CLI installs here and the extension's --install-dir (set via the
-# toolchainManager.installDirectory setting) resolves toolchains from the same
-# place. (SDK *discovery* by the extension is separate — see ncs-register-sdks.)
+# Points both nrfutil managers at the store, so CLI installs land where the extension
+# looks for toolchains (its installDirectory setting).
 RUN mkdir -p ${NCS_INSTALL_DIR} \
     && nrfutil sdk-manager config install-dir set ${NCS_INSTALL_DIR} \
     && nrfutil toolchain-manager config --set install-dir=${NCS_INSTALL_DIR}
 
-# The nRF Connect extension discovers SDKs by reading the CMake *user package
-# registry* (~/.cmake/packages/Zephyr) — i.e. where `west zephyr-export` would
-# register Zephyr. nrfutil's install does NOT do this, and ~/.cmake is in the
-# container's throwaway layer, so this script (re)creates those entries for
-# every SDK in the volume. It is run on each container start (postStartCommand).
+# The extension finds SDKs in the CMake package registry (~/.cmake/packages/Zephyr),
+# which nrfutil does not populate and which is lost with the container layer. So this
+# re-creates the entries for every SDK in the store, on each start (postStartCommand).
 COPY <<'EOF' /usr/local/bin/ncs-register-sdks
 #!/usr/bin/env bash
-# Register EVERY west workspace in the install dir (official NCS *and* custom
-# SDKs with any folder name) in the CMake user package registry, so the nRF
-# Connect extension discovers them. A dir qualifies if it contains
-# zephyr/share/zephyr-package/cmake (i.e. it's a real Zephyr/NCS workspace).
+# Registers every Zephyr workspace in the store, whatever its folder name. A folder
+# counts if it has zephyr/share/zephyr-package/cmake.
 set -eu
 NCS_DIR="${NCS_INSTALL_DIR:-/root/ncs}"
 REG="${HOME}/.cmake/packages/Zephyr"
@@ -133,10 +99,8 @@ echo "ncs-register-sdks: registered ${count} SDK(s) for the nRF Connect extensio
 EOF
 RUN chmod +x /usr/local/bin/ncs-register-sdks
 
-# ncs-ssh-key: ensure an SSH key exists and print its PUBLIC part. REUSES the
-# existing key (the ~/.ssh dir is persisted in the ncs-ssh volume), so once you
-# add it to your Git host it keeps working across rebuilds. Pass --new to force
-# a fresh key. Non-interactive — safe for postCreateCommand.
+# ncs-ssh-key [--new]: ensures an SSH key exists and prints its public part. Reuses the
+# key in the ncs-ssh volume so it survives rebuilds; --new forces a fresh one.
 COPY <<'EOF' /usr/local/bin/ncs-ssh-key
 #!/usr/bin/env bash
 set -eu
@@ -150,17 +114,15 @@ fi
 chmod 600 "$KEY" 2>/dev/null || true
 chmod 644 "${KEY}.pub" 2>/dev/null || true
 echo "=================================================================="
-echo "  SSH PUBLIC KEY — add it to your Git host to clone private repos:"
+echo "  SSH PUBLIC KEY, add it to your Git host to clone private repos:"
 echo "------------------------------------------------------------------"
 cat "${KEY}.pub"
 echo "=================================================================="
 EOF
 RUN chmod +x /usr/local/bin/ncs-ssh-key
 
-# ncs-ssh-setup <host>: guided authorization. Ensures a key, opens the host's
-# SSH-keys page in your browser ($BROWSER is wired to the host by VS Code), then
-# loops verifying `ssh -T` until the key is accepted. Run it in the terminal.
-#   ncs-ssh-setup bitbucket.org   (also: github.com, gitlab.com)
+# ncs-ssh-setup <host>: ensures a key, opens the host's SSH-keys page ($BROWSER is wired
+# to the host by VS Code), then re-checks `ssh -T` until the key is accepted.
 COPY <<'EOF' /usr/local/bin/ncs-ssh-setup
 #!/usr/bin/env bash
 set -eu
@@ -182,14 +144,13 @@ while ! authed; do
 	printf 'Add the key above to %s, then press Enter to re-check (Ctrl-C to abort)... ' "$HOST"
 	read -r _ || { echo "aborted"; exit 1; }
 done
-echo "SSH to ${HOST} works — you can clone private repos now."
+echo "SSH to ${HOST} works, you can clone private repos now."
 EOF
 RUN chmod +x /usr/local/bin/ncs-ssh-setup
 
-# Add a CUSTOM SDK from any git manifest repo into the volume and register it for
-# the extension. Run INSIDE the devcontainer terminal. For an SSH URL it first
-# runs ncs-ssh-setup for that host (acquire key -> open page -> confirm), then
-# clones — so a private/forked SDK repo just works.
+# ncs-add-sdk <name> <git-url> [rev] [toolchain] [manifest]: installs a custom SDK from
+# any west manifest repo into the volume and registers it. For an SSH URL it runs
+# ncs-ssh-setup for that host first, so private repos clone without extra steps.
 COPY <<'EOF' /usr/local/bin/ncs-add-sdk
 #!/usr/bin/env bash
 # Usage: ncs-add-sdk <name> <git-url> [revision] [toolchain-version] [manifest-file]
@@ -204,7 +165,7 @@ NCS_DIR="${NCS_INSTALL_DIR:-/root/ncs}"
 DEST="${NCS_DIR}/${NAME}"
 
 if [ -e "$DEST" ]; then
-	echo "ncs-add-sdk: '$DEST' already exists — remove it or pick another name." >&2
+	echo "ncs-add-sdk: '$DEST' already exists, remove it or pick another name." >&2
 	exit 1
 fi
 

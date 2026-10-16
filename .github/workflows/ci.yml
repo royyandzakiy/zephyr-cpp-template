@@ -1,0 +1,58 @@
+# Proves the template formats clean, builds for the Nordic DKs and runs on native_sim,
+# with the same Twister command the README gives. No hardware.
+
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: clang-format
+        run: git ls-files '*.c' '*.h' '*.cpp' '*.hpp' | xargs -r clang-format --dry-run --Werror
+
+      - name: ncs.py compiles and runs
+        run: |
+          python3 -m py_compile scripts/ncs.py
+          python3 scripts/ncs.py --help > /dev/null
+
+  twister:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    # Upstream Zephyr and the Zephyr SDK baked in, with ZEPHYR_BASE set, so west finds
+    # its workspace from a plain checkout with no west init.
+    container:
+      image: ghcr.io/royyandzakiy/zephyr-devcontainer-ci:z4.4.0-sdk1.0.1
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build for the DKs, run on native_sim
+        run: >
+          west twister -T . -v --inline-logs
+          -p native_sim -p nrf5340dk/nrf5340/cpuapp -p nrf52840dk/nrf52840
+
+      # Reports and logs only; the build directories are large and not needed to debug.
+      - name: Upload twister reports and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: twister-reports
+          path: |
+            twister-out/twister.json
+            twister-out/twister_report.xml
+            twister-out/**/handler.log
+            twister-out/**/build.log
+          if-no-files-found: warn

@@ -1,16 +1,16 @@
-# `scripts/ncs.py` — one CLI for SDKs, toolchains and registration
+# `scripts/ncs.py`, one CLI for SDKs, toolchains and registration
 
 One Python file manages every Zephyr SDK you use: official **nRF Connect SDK**,
-**vanilla Zephyr**, and your own **custom / forked / private** SDKs — plus their
-toolchains — and registers all of them so the *nRF Connect for VS Code*
+**vanilla Zephyr**, and your own **custom / forked / private** SDKs, plus their
+toolchains, and registers all of them so the *nRF Connect for VS Code*
 extension lists them.
 
 It runs the same way in three places:
 
 | Where | Store lives in | How |
 |---|---|---|
-| **WSL / Linux / macOS, native** | `~/ncs` (or anywhere you point it) | default — no root needed |
-| **Inside the devcontainer** | `$NCS_INSTALL_DIR` (`/root/ncs` by default) | default — the env var is picked up automatically |
+| **WSL / Linux / macOS, native** | `~/ncs` (or anywhere you point it) | default, no root needed |
+| **Inside the devcontainer** | `$NCS_INSTALL_DIR` (`/root/ncs` by default) | default, the env var is picked up automatically |
 | **From a Windows/macOS host** | the `ncs-sdks` Docker volume | add `--docker` before the subcommand |
 
 ```
@@ -22,7 +22,7 @@ python3 scripts/ncs.py <cmd> --help    # one command
 
 ## 1. The store
 
-Everything lives in one directory — the **store** — with a layout the extension
+Everything lives in one directory, the **store**, with a layout the extension
 understands natively:
 
 ```
@@ -33,7 +33,7 @@ understands natively:
 │   └── zephyr-sdk-0.17.0/     an upstream Zephyr SDK (the "vanilla" toolchain)
 ├── v3.3.0/                    official NCS west workspace
 ├── zephyr-v4.2.2/             vanilla Zephyr west workspace
-├── my-sdk/                    your fork — any folder name works
+├── my-sdk/                    your fork, any folder name works
 └── .venv/                     west + python deps for vanilla work
 ```
 
@@ -48,7 +48,7 @@ via `--sdk`) decides. So many projects share one store.
 
 ## 2. First-time setup
 
-### Native (WSL, Linux, macOS) — no root, no `/root/ncs`
+### Native (WSL, Linux, macOS), no root, no `/root/ncs`
 
 ```bash
 python3 scripts/ncs.py bootstrap                      # nrfutil -> ~/.local/bin
@@ -60,7 +60,7 @@ python3 scripts/ncs.py doctor                         # verify
 
 `bootstrap` downloads `nrfutil` for your OS/arch into `~/.local/bin` and installs
 its `toolchain-manager`, `sdk-manager` and `device` sub-commands. Everything from
-there on is per-user — nothing is written outside your home directory and the
+there on is per-user, nothing is written outside your home directory and the
 store. If `~/.local/bin` is not on your `PATH` yet, `bootstrap` prints the line to
 add.
 
@@ -88,7 +88,7 @@ command. It must come **before** the subcommand.
 
 ## 3. Moving the store (e.g. to `~/ncs` in WSL)
 
-The store directory is resolved in this order — first hit wins:
+The store directory is resolved in this order, first hit wins:
 
 1. `--install-dir <path>` on the command line
 2. `$NCS_INSTALL_DIR` in the environment
@@ -105,7 +105,7 @@ NCS_INSTALL_DIR=/mnt/big/ncs python3 scripts/ncs.py list   # one-off
 `config set install-dir` also re-points **nrfutil's own** install dirs
 (`toolchain-manager` and `sdk-manager` keep their own), so installs and lookups
 agree. It then reminds you about the VS Code setting, which is a *third*
-independent place — write it with `register --vscode`.
+independent place, write it with `register --vscode`.
 
 ### If you move the devcontainer's store off `/root/ncs`
 
@@ -120,14 +120,14 @@ The container has three hard-coded references. Change all three together:
 The container path must be the **home directory of the container user**'s `ncs`
 folder, because that is where the extension installs by default. So if you also
 switch `remoteUser` away from `root`, use `/home/<user>/ncs` in all three.
-`ncs.py` itself needs no edit — it reads `NCS_INSTALL_DIR`.
+`ncs.py` itself needs no edit, it reads `NCS_INSTALL_DIR`.
 
 Not using the devcontainer at all (native WSL + the VS Code WSL extension) is
 simpler: one `config set install-dir ~/ncs` plus `register --vscode`.
 
 ---
 
-## 4. How the extension finds things — and how this tool guarantees it
+## 4. How the extension finds things, and how this tool guarantees it
 
 The nRF Connect extension discovers **toolchains** and **SDKs** through two
 completely separate mechanisms. Both must point at your store:
@@ -135,7 +135,7 @@ completely separate mechanisms. Both must point at your store:
 | What | How the extension finds it | What satisfies it |
 |---|---|---|
 | **Toolchains** | runs `nrfutil` with an `--install-dir` taken from the setting `nrf-connect.toolchainManager.installDirectory` | `ncs.py register --vscode` (writes `.vscode/settings.json`), or the setting in `devcontainer.json` |
-| **SDKs** | reads the **CMake user package registry** `~/.cmake/packages/Zephyr` — where `west zephyr-export` registers a Zephyr tree | `ncs.py register` — every install ends with it |
+| **SDKs** | reads the **CMake user package registry** `~/.cmake/packages/Zephyr`, where `west zephyr-export` registers a Zephyr tree | `ncs.py register`, every install ends with it |
 
 `register` walks the store and registers **every** west workspace it finds. The
 test is structural, not name-based: a folder counts as an SDK if it contains
@@ -152,7 +152,7 @@ python3 scripts/ncs.py register --vscode   # + the extension's install dir
 `register --vscode` edits `.vscode/settings.json` as *text*, so the comments in it
 survive (VS Code settings are JSONC, which `json.dump` would destroy). It updates
 the value in place if the key is already there, otherwise inserts it at the top,
-matching the file's own indentation — and leaves a `settings.json.bak` behind.
+matching the file's own indentation, and leaves a `settings.json.bak` behind.
 
 After registering: **nRF Connect: Refresh SDKs**, or reload the window.
 
@@ -200,12 +200,12 @@ Downloads the **Zephyr SDK** (`sdk-ng` minimal bundle for your host) into
 fetches upstream Zephyr into `<store>/zephyr-v4.2.2` using a store-local venv's
 `west`, and installs `zephyr/scripts/requirements.txt` into that venv
 (`--no-python-deps` to skip). Default targets are `arm-zephyr-eabi` and
-`x86_64-zephyr-elf` — the second one is what `native_sim` needs.
+`x86_64-zephyr-elf`, the second one is what `native_sim` needs.
 
 Vanilla workspaces register in the CMake registry exactly like NCS ones, so the
 extension lists them as SDKs. Their toolchain is a Zephyr SDK rather than an
 nrfutil bundle, so if the extension's toolchain dropdown does not offer it, build
-those from the CLI (`ncs.py build --sdk zephyr-v4.2.2`) — everything else, including
+those from the CLI (`ncs.py build --sdk zephyr-v4.2.2`), everything else, including
 IntelliSense from `compile_commands.json`, works the same.
 
 ### A custom / forked / private SDK
@@ -266,13 +266,13 @@ python3 scripts/ncs.py flash --serial 1050073602
 ```
 
 `build` picks the SDK from `--sdk`, else the `toolchain` config value if a folder
-of that name exists, else the only installed SDK — and refuses to guess when
+of that name exists, else the only installed SDK, and refuses to guess when
 several are installed. `env` prints POSIX-shell exports (`ZEPHYR_BASE`,
 `ZEPHYR_SDK_INSTALL_DIR`, `PATH`, …) for the SDK you name, which is the handy way
 to make an ordinary terminal, `west`, `twister` or a CI step use one specific SDK.
 
-`flash` always runs on the machine you invoke it from (never in the container) —
-see the hardware notes in [README §6](../README.md).
+`flash` always runs on the machine you invoke it from (never in the container)  - 
+see [`setup/flash-monitor.md`](setup/flash-monitor.md).
 
 ---
 
@@ -304,7 +304,7 @@ Global flags, always **before** the subcommand: `--install-dir <path>`,
 ## 8. Notes and limits
 
 - **Windows natively** works for `flash`, `config`, `bootstrap` and the `--docker`
-  backend. Installing SDKs on the Windows filesystem is not supported here — the
+  backend. Installing SDKs on the Windows filesystem is not supported here, the
   Zephyr SDK setup and the CMake registry are POSIX-shaped. Use WSL or `--docker`.
 - **The CMake registry is per user and per machine.** A store shared over a mount
   still needs `register` run once per user/container that should see it.
