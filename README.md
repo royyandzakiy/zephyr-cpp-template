@@ -65,10 +65,9 @@ exercised by a real build:
 
 ```
 CONFIG_CPP=y
-CONFIG_STD_CPP2B=y           # C++23
-CONFIG_GLIBCXX_LIBCPP=y      # full libstdc++: std::array, std::string_view, std::chrono
+CONFIG_STD_CPP2B=y             # C++23
+CONFIG_REQUIRES_FULL_LIBCPP=y  # full C++ library: libstdc++ on cross toolchains, the host's on native_sim
 CONFIG_CPP_RTTI=y
-CONFIG_REQUIRES_FULL_LIBC=y  # libstdc++ needs a full libc; the toolchain picks which
 ```
 
 `prj.conf` holds nothing board-specific, so the same source builds for any board.
@@ -78,7 +77,6 @@ Board-specific options live in `boards/`, which Zephyr merges in by board name:
 |---|---|
 | `nrf5340dk_nrf5340_cpuapp.conf`, `nrf52840dk_nrf52840.conf` | RTT log backend, so logs are readable over the J-Link from inside the container |
 | `native_sim_native.overlay` | puts `led0` on the GPIO emulator, since native_sim has no LED |
-| `native_sim_native.conf` | console on stdout, which is where Twister reads it |
 
 ## Tests and CI
 
