@@ -20,7 +20,7 @@ in the nRF Connect for VS Code extension — exactly like a native install.
                  ▼
 ┌─ ncs-sdks : Docker VOLUME  → /root/ncs ──┐   the SDK store. all versions +
 │  toolchains/  v3.3.0/  v3.2.4/  my-sdk/  │   toolchains. shared, persistent.
-└──────────────────────────────────────────┘
+└──────────────────────────────────────────┘   (or a plain dir, e.g. ~/ncs in WSL)
 ┌─ ncs-ssh  : Docker VOLUME  → /root/.ssh ─┐   your SSH key (add to Git host once).
 └──────────────────────────────────────────┘
                  │ + bind-mount
@@ -45,29 +45,35 @@ Why this shape:
 ## 2. The one thing that's non-obvious: how the extension *finds* SDKs
 
 The nRF Connect extension discovers toolchains and SDKs through **two separate
-mechanisms**, and both have to point at `/root/ncs`. This is the part that took
-the most digging, so it's documented here explicitly.
+mechanisms**, and both have to point at the same **store** directory (the volume
+target `/root/ncs` in the container, or e.g. `~/ncs` natively in WSL). This is the
+part that took the most digging, so it's documented here explicitly.
 
 | What | How the extension finds it | What makes it work here |
 |---|---|---|
-| **Toolchains** | runs `nrfutil toolchain list --install-dir <dir>` | the setting **`nrf-connect.toolchainManager.installDirectory` = `/root/ncs`** in `devcontainer.json` |
-| **SDKs** | reads the **CMake user package registry** `~/.cmake/packages/Zephyr` (where `west zephyr-export` registers Zephyr) | **`ncs-register-sdks`** run on every start via `postStartCommand` |
+| **Toolchains** | runs `nrfutil toolchain list --install-dir <dir>` | the setting **`nrf-connect.toolchainManager.installDirectory` = the store** — in `devcontainer.json`, or written by `ncs.py register --vscode` |
+| **SDKs** | reads the **CMake user package registry** `~/.cmake/packages/Zephyr` (where `west zephyr-export` registers Zephyr) | **`ncs.py register`** — run by every install, and on every container start via `postStartCommand` |
 
-So if the extension ever says **"SDK not configured"** or a version is missing:
+So if the extension ever says **"SDK not configured"** or a version is missing,
+run `python3 scripts/ncs.py doctor` — it checks both mechanisms and reports which
+one is wrong. The fix is almost always:
 
-1. **Toolchain missing?** → check the `installDirectory` setting (see below).
-2. **SDK missing?** → the CMake registry wasn't populated. Re-run `ncs-register-sdks`
-   in the terminal, then **nRF Connect: Refresh SDKs** (or reload the window).
-   `~/.cmake` is ephemeral, which is exactly why `postStartCommand` re-runs it
-   every start.
+```bash
+python3 scripts/ncs.py register --vscode
+```
+
+then **nRF Connect: Refresh SDKs** (or reload the window). `~/.cmake` is
+ephemeral in a container, which is exactly why `postStartCommand` re-registers on
+every start.
 
 ### Where to change registration
 
 | To change… | Edit… |
 |---|---|
-| The install dir the extension uses | `nrf-connect.toolchainManager.installDirectory` in [.devcontainer/devcontainer.json](.devcontainer/devcontainer.json) (and the volume mount target + `NCS_INSTALL_DIR` in the [Dockerfile](Dockerfile) if you move it off `/root/ncs`) |
+| Where the store is, natively | `python3 scripts/ncs.py config set install-dir ~/ncs` — see [docs/ncs-cli.md](docs/ncs-cli.md) §3 |
+| Where the store is, in the container | `nrf-connect.toolchainManager.installDirectory` in [.devcontainer/devcontainer.json](.devcontainer/devcontainer.json), the volume mount target there, and `NCS_INSTALL_DIR` in the [.devcontainer/Dockerfile](.devcontainer/Dockerfile) — all three together |
 | When SDKs get registered | `postStartCommand` in [.devcontainer/devcontainer.json](.devcontainer/devcontainer.json) |
-| *Which* folders count as SDKs | the `ncs-register-sdks` script (baked in the [Dockerfile](Dockerfile)) — it registers any folder under `/root/ncs` containing `zephyr/share/zephyr-package/cmake` |
+| *Which* folders count as SDKs | `scripts/ncs.py register` (and the baked-in `ncs-register-sdks`) — any folder in the store containing `zephyr/share/zephyr-package/cmake`, whatever its name |
 
 ---
 
@@ -82,19 +88,30 @@ So if the extension ever says **"SDK not configured"** or a version is missing:
 | `ncs-ssh-setup <host>` | **Guided** SSH authorization: ensure key → open the host's SSH-keys page in your browser → wait while you add it → verify `ssh -T`. Hosts: `bitbucket.org`, `github.com`, `gitlab.com`. |
 | `ncs-add-sdk <custom-folder-name> <git-url> [branch] [toolchain] [manifest-file]` | Installs any custom SDK from a git manifest repo into the volume and registers it. For an SSH URL it runs `ncs-ssh-setup` first. Run it in the devcontainer terminal. |
 
-### Host CLI — `scripts/ncs.py` (cross-platform: Linux / macOS / Windows)
+### `scripts/ncs.py` — the one CLI (full guide: [docs/ncs-cli.md](docs/ncs-cli.md))
 
-One Python CLI for everything host-side (`python scripts/ncs.py <cmd> -h` for details).
-Python is already required by the nRF/Zephyr ecosystem, so there's no new dependency.
+One Python file installs, registers and uses every kind of SDK — official NCS,
+vanilla Zephyr, and custom/forked/private — plus their toolchains. It runs
+natively (WSL/Linux/macOS, no root, store in `~/ncs`), inside the devcontainer,
+or against the Docker volume from a Windows/macOS host (`--docker`).
 
 | Command | Purpose |
 |---|---|
-| `build-image` | Build/refresh the `ncs-base` image and ensure the SDK volume. Run once. |
-| `install-sdk v3.3.0` | Install an **official** NCS version (SDK + matching toolchain) into the volume via `nrfutil sdk-manager`. `--list` shows available/installed. |
-| `install-custom-sdk <name> <git-url> [--rev …] [--toolchain …]` | Install a **custom** SDK via `west` from the host (public repos; private repos need the in-container `ncs-add-sdk`, which has the SSH key). |
-| `shell [--ncs v3.3.0] [--sdk <folder>]` | Interactive shell with this project mounted and `ZEPHYR_BASE` set. |
-| `build [--ncs v3.3.0] [--sdk <folder>] [--board …] [--pristine]` | Headless build. `--ncs` = toolchain; `--sdk` = which SDK folder (defaults to `--ncs`). |
-| `flash [--serial …] [--hex …]` | Flash the built `.hex` from the **host** via `nrfutil device` (J-Link) — see §6. |
+| `bootstrap` | Download `nrfutil` into `~/.local/bin` + its sub-commands. No root. |
+| `config show \| set <key> <value>` | Where the store lives (`install-dir`) and other defaults. |
+| `install ncs v3.3.0` | Official NCS: toolchain + `sdk-nrf` workspace + registration. |
+| `install vanilla v4.2.2` | Upstream Zephyr: Zephyr SDK toolchain + `zephyr` workspace + registration. |
+| `install custom <name> <git-url> [--rev …] [--toolchain …]` | Any manifest repo — your fork, a private SDK. `--vanilla-toolchain` bases it on a Zephyr SDK instead. |
+| `install toolchain <version> [--zephyr-sdk]` | A toolchain on its own. |
+| `list [--json]` / `remove <name>` | What is installed (and registered) / delete one. |
+| `register [--vscode]` | Rebuild the CMake package registry, and point the extension at the store. |
+| `doctor` | Diagnose "SDK not configured" — checks every discovery path. |
+| `build` / `shell` / `env <name>` | Headless build / interactive shell / shell exports for one SDK. |
+| `flash [--serial …]` | Flash the built `.hex` from **this** machine via `nrfutil device` — see §6. |
+| `build-image` | Build the `ncs-base` image and ensure the SDK volume. |
+
+Add `--docker` **before** the subcommand to run any store command in the
+container instead of on this filesystem.
 
 ### Optional project file
 
@@ -130,13 +147,20 @@ rebuild the container. See §6 for the per-OS hardware steps.
 ### One-time, on this machine
 
 ```bash
-# 1. Build the small base image (+ create the SDK volume)
+# 1. Build the small base image (+ create the SDK volume).
+#    Optional: the devcontainer builds the image itself from
+#    .devcontainer/Dockerfile on first open. Run this if you want the
+#    image + volume ready before opening, or for the --docker CLI below.
 python scripts/ncs.py build-image
 
-# 2. Install at least one official SDK version into the shared volume
-python scripts/ncs.py install-sdk v3.3.0
-python scripts/ncs.py install-sdk v3.2.4    # add as many as you like
+# 2. Install at least one SDK into the shared volume
+python scripts/ncs.py --docker install ncs v3.3.0
+python scripts/ncs.py --docker install ncs v3.2.4       # as many as you like
+python scripts/ncs.py --docker install vanilla v4.2.2   # upstream Zephyr too
 ```
+
+Prefer to skip Docker and keep the store in WSL under `~/ncs` (no root)? Same
+CLI, without `--docker` — see [docs/ncs-cli.md](docs/ncs-cli.md) §2.
 
 ### Open the project
 
@@ -158,9 +182,9 @@ west build -b nrf5340dk/nrf5340/cpuapp .
 ### Build headless (no VS Code)
 
 ```bash
-python scripts/ncs.py build                          # v3.3.0, nRF5340 DK
-python scripts/ncs.py build --ncs v3.2.4
-python scripts/ncs.py build --sdk my-sdk --ncs v3.1.1   # custom SDK + its toolchain
+python scripts/ncs.py build                             # default SDK, nRF5340 DK
+python scripts/ncs.py build --sdk v3.2.4
+python scripts/ncs.py build --sdk my-sdk                # custom SDK, its own toolchain
 ```
 
 ### Switch SDK versions
@@ -171,15 +195,16 @@ project pins a version.
 
 ### Add a custom / forked / private SDK
 
-Install the toolchain it's based on first if you don't have it
-(`nrfutil toolchain-manager install --ncs-version vX.Y.Z` in the terminal), then:
-
 ```bash
-# in the devcontainer terminal — guided SSH for private repos, then clones:
-ncs-add-sdk my-sdk git@github.com:me/sdk-nrf-fork.git my-branch v3.3.0
+python3 scripts/ncs.py install custom my-sdk git@github.com:me/sdk-nrf-fork.git \
+        --rev my-branch --toolchain v3.3.0
 ```
-Use the git **clone** URL (not the browser `/src/...` URL). After it finishes:
-**Refresh SDKs** → it appears as `my-sdk` in *Add build configuration*.
+The toolchain it is based on gets installed first if you don't have it. Use the
+git **clone** URL (not the browser `/src/...` URL). After it finishes: **Refresh
+SDKs** → it appears as `my-sdk` in *Add build configuration*. For a **private**
+repo inside the devcontainer, authorize the container's key first with
+`ncs-ssh-setup <host>` (or use the bash equivalent `ncs-add-sdk`, which does the
+guided SSH flow itself).
 
 ### Optional: a local first-time setup hook
 
@@ -295,14 +320,15 @@ the UART console, open the J-Link VCOM port in a serial terminal.
 
 | Path | What |
 |---|---|
-| `Dockerfile` | Builds `ncs-base` (host tools + nrfutil + the `ncs-*` helper commands). |
-| `.dockerignore` | Keeps the image build context empty (no SDK, no source). |
-| `.devcontainer/devcontainer.json` | Image ref, volume mounts, workspace bind, extension list, the `installDirectory` setting, `postCreate`/`postStart` commands. |
+| `.devcontainer/Dockerfile` | Builds `ncs-base` (host tools + nrfutil + the `ncs-*` helper commands). |
+| `.devcontainer/.dockerignore` | Keeps the image build context empty (no SDK, no source). |
+| `.devcontainer/devcontainer.json` | `build` block (points at the Dockerfile beside it), volume mounts, workspace bind, extension list, the `installDirectory` setting, `postCreate`/`postStart` commands. |
 | `.devcontainer/setup-local.sh` | *(optional, gitignored)* your own first-time setup hook — absent in public copies. |
 | `CMakeLists.txt`, `prj.conf`, `src/main.cpp` | The freestanding C++23 app. |
 | `sample.yaml` | Twister build test (`west twister -T .`). |
 | `debug-overlay.conf` | Extra debug Kconfig (`-DEXTRA_CONF_FILE=...`). |
-| `scripts/ncs.py` | Cross-platform host CLI: build/install/shell/flash (see §3). |
+| `scripts/ncs.py` | The one CLI: install/register/list/build/shell/flash (see §3). |
+| `docs/ncs-cli.md` | Full guide to that CLI: the store, moving it, adding each kind of SDK, registration, troubleshooting. |
 | `.clang-format`, `.clang-tidy`, `.cmake-format.yaml`, `.vscode/settings.json` | Formatting/lint/IntelliSense config. |
 | `.gitattributes` | Forces `*.sh` to LF (they run in Linux). |
 
@@ -314,5 +340,22 @@ the UART console, open the J-Link VCOM port in a serial terminal.
 2. (Optional) rename `project()` in `CMakeLists.txt`.
 3. (Optional) for private/internal setup, drop a `.devcontainer/setup-local.sh`
    (gitignored) — see "Optional: a local first-time setup hook" in §4.
-4. **Reopen in Container.** It attaches to the same `ncs-base` image and the same
-   `ncs-sdks` volume — no SDK re-download. Pick an SDK in the extension and build.
+4. **Reopen in Container.** It builds/reuses the same `ncs-base` image and mounts
+   the same `ncs-sdks` volume — no SDK re-download. Pick an SDK in the extension
+   and build.
+
+### Reusing just the devcontainer in an existing Zephyr project
+
+`.devcontainer/` is self-contained: it holds both `devcontainer.json` **and** the
+`Dockerfile` it builds, and nothing in it reads from the project tree. So you can
+
+```bash
+cp -r .devcontainer /path/to/other-zephyr-project/
+```
+
+and **Reopen in Container** there. On the *same machine* the `ncs-sdks` volume
+already holds your SDKs, so they show up immediately (Docker's layer cache also
+makes the image build near-instant). On a *new machine*, install an SDK once —
+`ncs-add-sdk` in the container terminal, the extension's **Manage SDKs**, or
+`python scripts/ncs.py --docker install ncs v3.3.0` from this template — and
+every project after that gets it for free.

@@ -1,0 +1,5 @@
+- copy this project
+	- ensure nrf connect ext is able to detect the project, sdk, toolchain
+	- ensure registering sdk works fine
+	- ensure /workspaces works fine
+- attempt to move sdks into /workdirs

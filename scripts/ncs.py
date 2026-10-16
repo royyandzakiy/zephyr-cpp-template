@@ -1162,8 +1162,11 @@ def cmd_flash(ctx):
 
 
 def cmd_build_image(ctx):
+    # The Dockerfile lives in .devcontainer/ so that folder is a self-contained
+    # drop-in for other projects; build from there (its own .dockerignore keeps
+    # the context empty).
     run(["docker", "build", "--platform", ctx.get("docker_platform"),
-         "-t", ctx.get("image"), str(ROOT)])
+         "-t", ctx.get("image"), str(ROOT / ".devcontainer")])
     run(["docker", "volume", "create", ctx.get("volume")], check=False)
     print(f"\nBuilt {ctx.get('image')} and ensured volume '{ctx.get('volume')}'.\n"
           f"Next:  {SELF} --docker install ncs v3.3.0")

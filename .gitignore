@@ -5,9 +5,13 @@
 # build
 /build*/
 twister-out/
+__pycache__
 
 # signing key - private key must never be committed
 signing_key.pem
+
+# backup left by `ncs.py register --vscode`
+.vscode/settings.json.bak
 
 # internal / company-private bits — never ship with the public template
 private/

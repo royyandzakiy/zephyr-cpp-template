@@ -1,23 +1,18 @@
 {
   "name": "nRF Connect SDK (C++)",
 
-  // Small, version-agnostic base image (host tools + nrfutil). Build it once:
-  //     docker build -t ncs-base:latest .
-  "image": "ncs-base:latest",
+  // Built from the Dockerfile next to this file, so .devcontainer/ is a
+  // self-contained drop-in. --platform here applies to the BUILD; the one in
+  // runArgs applies to `docker run`.
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".",
+    "options": ["--platform=linux/amd64"]
+  },
 
-  // Hardware access for flashing + RTT monitoring from inside the container.
-  // --privileged lets the container CLAIM the J-Link over libusb (the debug
-  // probe); SYS_PTRACE + unconfined seccomp are for on-target debugging.
-  // On Windows you must first forward the probe to WSL2:
-  //     usbipd list                       (find the J-Link's BUSID)
-  //     usbipd attach --wsl --busid <id>  (detaches it from Windows!)
-  // Flashing/RTT use the J-Link debug interface (libusb) — they do NOT need
-  // /dev/ttyACM, so no cdc_acm / custom kernel is required. Monitor over RTT.
-  // --platform pins amd64 so the image is identical on every host (emulated on
-  // Apple Silicon / arm64). --privileged + the /dev mount below give hardware
-  // access for flashing/RTT on Windows (via usbipd) and Linux (native USB).
-  // On macOS there is no USB passthrough to containers — build here, flash from
-  // the host; you can drop the "/dev" mount there if it bothers Docker Desktop.
+  // --privileged claims the J-Link over libusb; SYS_PTRACE + unconfined seccomp
+  // are for on-target debugging. On Windows, forward the probe first with
+  // `usbipd attach --wsl --busid <id>` (see README).
   "runArgs": [
     "--platform=linux/amd64",
     "--privileged",
@@ -25,42 +20,27 @@
     "--security-opt", "seccomp=unconfined"
   ],
 
-  // Bind THIS project folder into the container explicitly. The app is
-  // freestanding: it builds against whichever SDK you select in the extension,
-  // it does NOT live inside the SDK tree.
+  // The app is freestanding: it builds against whichever SDK is selected in the
+  // extension rather than living inside the SDK tree.
   "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
   "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/${localWorkspaceFolderBasename},type=bind,consistency=cached",
 
-  // Mount the SHARED SDK volume at /root/ncs — the SAME directory the nRF
-  // Connect extension installs SDKs into by default (~/ncs). This is the whole
-  // trick: the extension's "Manage SDKs" UI and the install-sdk.ps1 script both
-  // write here, into the volume, so versions persist and both tools see them.
   "mounts": [
+    // /root/ncs is the extension's default SDK location (~/ncs), so its
+    // "Manage SDKs" UI writes straight into the shared volume.
     "source=ncs-sdks,target=/root/ncs,type=volume",
-    // Persist ~/.ssh so the key survives rebuilds — add it to your Git host once.
+    // Persist ~/.ssh so the key survives rebuilds.
     "source=ncs-ssh,target=/root/.ssh,type=volume",
-    // Whole host /dev (live), so the container sees BOTH the J-Link's libusb
-    // device (/dev/bus/usb — flashing/RTT) AND its UART VCOM nodes (/dev/ttyACM*
-    // — serial console). Live bind, so a probe attached via `usbipd attach`
-    // after start still appears. See README §6 for the cdc_acm/usbipd steps.
+    // Live bind so a probe attached after start still appears.
     "source=/dev,target=/dev,type=bind"
   ],
 
-  // On container creation: ensure an SSH key exists and print its PUBLIC key in
-  // the creation log (View → "Dev Containers: Show Container Log"). For the
-  // guided flow (open the host's key page + verify the connection), run
-  // `ncs-ssh-setup github.com` in the terminal — `ncs-add-sdk` does this
-  // automatically for SSH URLs.
-  //
-  // The trailing clause runs an OPTIONAL local first-time setup script ONLY if
-  // .devcontainer/setup-local.sh exists (it's gitignored). Use it to install a
-  // private/forked SDK, etc. Public copies ship without it, so it's a no-op.
+  // Ensure an SSH key exists, then run .devcontainer/setup-local.sh if present
+  // (gitignored; used for private SDK forks).
   "postCreateCommand": "ncs-ssh-key; if [ -f .devcontainer/setup-local.sh ]; then bash .devcontainer/setup-local.sh; fi",
 
-  // Register the volume's SDKs in the CMake user package registry on every
-  // start. The extension discovers SDKs from ~/.cmake/packages/Zephyr (not from
-  // the install dir), and that path is ephemeral — so without this, "Add build
-  // configuration" reports "SDK not configured" even though the SDKs are present.
+  // The extension discovers SDKs from ~/.cmake/packages/Zephyr, which is
+  // ephemeral, so re-register on every start.
   "postStartCommand": "ncs-register-sdks",
 
   "customizations": {
@@ -73,22 +53,12 @@
         "twxs.cmake"
       ],
       "settings": {
-        // CRITICAL: tell the extension where SDKs/toolchains live. Without this,
-        // the extension INSTALLS into ~/ncs (/root/ncs) but DISCOVERS toolchains
-        // from its bundled nrfutil's own default dir -> installed-but-not-listed
-        // -> "SDK not configured". Setting it makes the extension pass
-        // `--install-dir /root/ncs` for both install and discovery, so it sees
-        // everything in the shared volume. (scope: machine-overridable.)
+        // Must match the volume mount above, or the extension installs into
+        // /root/ncs but discovers toolchains elsewhere.
         "nrf-connect.toolchainManager.installDirectory": "/root/ncs",
-
-        // Pick the SDK version + toolchain per build configuration in the
-        // nRF Connect view; both v3.3.0 and v3.2.4 from the volume will list.
         "terminal.integrated.defaultProfile.linux": "bash",
         "C_Cpp.default.cppStandard": "c++23"
       }
     }
   }
-
-  // NOTE: flashing/debugging over J-Link USB from inside a container is not
-  // practical on Windows. Build here, flash from the Windows host with nRF Util.
 }

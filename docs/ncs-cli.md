@@ -113,7 +113,7 @@ The container has three hard-coded references. Change all three together:
 
 | File | What to change |
 |---|---|
-| [Dockerfile](../Dockerfile) | `ENV NCS_INSTALL_DIR=/root/ncs` |
+| [.devcontainer/Dockerfile](../.devcontainer/Dockerfile) | `ENV NCS_INSTALL_DIR=/root/ncs` |
 | [.devcontainer/devcontainer.json](../.devcontainer/devcontainer.json) | the mount `source=ncs-sdks,target=/root/ncs` |
 | [.devcontainer/devcontainer.json](../.devcontainer/devcontainer.json) | the setting `nrf-connect.toolchainManager.installDirectory` |
 
