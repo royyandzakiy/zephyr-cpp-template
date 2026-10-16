@@ -1,54 +1,18 @@
+# 4-space indentation and 100 columns, unlike Zephyr upstream (tabs). To reformat:
+#   git ls-files '*.c' '*.h' '*.cpp' '*.hpp' | xargs clang-format -i
 ---
 Language: Cpp
-BasedOnStyle: Microsoft
+BasedOnStyle: LLVM
 
-# === Indentation & Alignment ===
-UseTab: Always
 IndentWidth: 4
-TabWidth: 4
-ContinuationIndentWidth: 4
-AccessModifierOffset: -2
-AlignAfterOpenBracket: Align
-AlignOperands: Align
-AlignTrailingComments: true
+UseTab: Never
+ColumnLimit: 100
 
-# === Braces & Blocks ===
-BreakBeforeBraces: Attach # void func() {
-BraceWrapping:
-  AfterFunction: true
-  AfterClass: true
-  AfterStruct: true
-  AfterNamespace: true
-  BeforeElse: true
-  BeforeCatch: true
-
-# === Line & Spacing ===
-ColumnLimit: 120
-SpaceBeforeParens: ControlStatements
-SpaceBeforeParensOptions:
-  AfterControlStatements: true
-  AfterFunctionDefinitionName: false
-  AfterFunctionDeclarationName: false
-PointerAlignment: Right
-SpaceAfterTemplateKeyword: true
-SpacesInContainerLiterals: true
-SpacesInParentheses: false
-SpacesInSquareBrackets: false
-
-# === Statements & Formatting Rules ===
+BreakBeforeBraces: Linux
 AllowShortFunctionsOnASingleLine: None
-AllowShortIfStatementsOnASingleLine: Never
+AllowShortIfStatementsOnASingleLine: false
 AllowShortLoopsOnASingleLine: false
-AllowShortBlocksOnASingleLine: Never
-AllowShortCaseLabelsOnASingleLine: false
-AllowAllParametersOfDeclarationOnNextLine: true
-AllowAllArgumentsOnNextLine: true
 
-# === Includes ===
-SortIncludes: CaseSensitive
-IncludeBlocks: Preserve
-
-# === Misc ===
+PointerAlignment: Right
+SortIncludes: false
 FixNamespaceComments: true
-NamespaceIndentation: None
-ReflowComments: true

@@ -1,38 +1,33 @@
-# clangd language-server config. Concerns are split by tool:
-#   .clangd        -> how the language server behaves (this file)
-#   .clang-tidy    -> which static-analysis checks run
-#   .clang-format  -> formatting style
-# CMake mirrors the active preset's compile DB to the project root (see CMakeLists.txt),
-# so "." resolves to build/<preset>/compile_commands.json for whatever you last configured.
-
+# No CompilationDatabase: clangd finds build/compile_commands.json, which is where a
+# vanilla Zephyr build puts it. A sysbuild build (the NCS default) puts it in
+# build/<project-dir>/, so for those uncomment the line below and set the name.
 CompileFlags:
-  CompilationDatabase: .
-  # clangd parses with its own clang; drop driver-mode flags it can choke on
-  # when the DB was produced by clang-cl / MSVC.
-  Remove:
-    - /Fo*
-    - /Fd*
-    - /nologo
-    - -TP
+  # CompilationDatabase: build/zephyr-cpp-template
 
-Index:
-  Background: Build          # keep the project index warm in the background
-  StandardLibrary: Yes       # index the STL for completion/xrefs
+  # GCC-only flags from the Zephyr toolchain that clangd rejects.
+  Remove:
+    - -fno-reorder-functions
+    - -fno-defer-pop
+    - -fno-freestanding
+    - --param=min-pagesize=*
+    - -mfp16-format=*
+    - -fno-printf-return-value
+    - -fstrict-volatile-bitfields
+    - -mlongcalls
+    - -mtext-section-literals
 
 Diagnostics:
-  UnusedIncludes: Strict     # IncludeCleaner: flag headers you don't use
-  MissingIncludes: Strict    # flag symbols used via transitive includes
+  # Zephyr headers pull in transitively-used symbols by design.
+  UnusedIncludes: None
+  MissingIncludes: None
   ClangTidy:
-    FastCheckFilter: Loose   # run more tidy checks in-editor (config in .clang-tidy)
+    FastCheckFilter: Loose
+
+Index:
+  Background: Build
+  StandardLibrary: true
 
 InlayHints:
-  Enabled: Yes
-  ParameterNames: Yes
-  DeducedTypes: Yes
-  Designators: Yes
-
-Hover:
-  ShowAKA: Yes               # resolve typedefs in hover ("aka: std::string")
-
-Completion:
-  AllScopes: Yes             # suggest symbols from all namespaces, with auto-import
+  Enabled: true
+  ParameterNames: true
+  DeducedTypes: true

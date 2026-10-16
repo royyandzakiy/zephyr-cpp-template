@@ -1,0 +1,21 @@
+/* native_sim has no LED, so led0 sits on the GPIO emulator. */
+/ {
+    emul_gpio: gpio_emul {
+        compatible = "zephyr,gpio-emul";
+        status = "okay";
+        gpio-controller;
+        #gpio-cells = <2>;
+        ngpios = <32>;
+    };
+
+    leds {
+        compatible = "gpio-leds";
+        emul_led: led_0 {
+            gpios = <&emul_gpio 0 GPIO_ACTIVE_HIGH>;
+        };
+    };
+
+    aliases {
+        led0 = &emul_led;
+    };
+};

@@ -1,0 +1,30 @@
+# 4-space indentation, unlike Zephyr upstream (tabs). See CONTRIBUTING.md.
+root = true
+
+[*]
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+charset = utf-8
+
+[*.{c,h,cpp,hpp,overlay,dts,dtsi}]
+indent_style = space
+indent_size = 4
+max_line_length = 100
+
+[*.py]
+indent_style = space
+indent_size = 4
+
+[*.{yml,yaml,json}]
+indent_style = space
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false
+
+[{Dockerfile,*.sh}]
+indent_style = tab
+
+[Makefile]
+indent_style = tab

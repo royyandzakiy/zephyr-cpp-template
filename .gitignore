@@ -1,18 +1,30 @@
-# editors
-*.swp
-*~
-
-# build
+# Build output, including `-d` dirs like build_nrf5340dk.
+# Anchored, since a bare build* would also ignore folders like docs/building/.
 /build*/
-twister-out/
-__pycache__
 
-# signing key - private key must never be committed
+# Twister output. Not twister*/, which would also ignore twister_harness/.
+twister-out*/
+
+# Python
+**/.venv/
+**/__pycache__/
+**/.pytest_cache/
+
+# Signing key. The private key must never be committed.
 signing_key.pem
 
-# backup left by `ncs.py register --vscode`
+# Backup left by `ncs.py register --vscode`.
 .vscode/settings.json.bak
 
-# local-only setup, never committed
+# Local only, never committed.
 private/
 .devcontainer/setup-local.sh
+.env
+.claude/settings.local.json
+
+# Editors and OS files.
+*.swp
+*~
+.idea/
+.DS_Store
+Thumbs.db

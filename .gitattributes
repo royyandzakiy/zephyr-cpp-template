@@ -1,4 +1,8 @@
-# Shell scripts must stay LF — they run inside the Linux container.
-*.sh text eol=lf
-# Python helpers run on Linux/macOS too; keep LF so the shebang works.
-*.py text eol=lf
+# LF everywhere, whatever core.autocrlf says: edited on Windows, built in a Linux container.
+* text=auto eol=lf
+
+# Never converted.
+*.png  binary
+*.hex  binary
+*.bin  binary
+*.elf  binary
