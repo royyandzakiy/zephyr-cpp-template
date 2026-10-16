@@ -13,6 +13,6 @@ signing_key.pem
 # backup left by `ncs.py register --vscode`
 .vscode/settings.json.bak
 
-# internal / company-private bits — never ship with the public template
+# local-only setup, never committed
 private/
 .devcontainer/setup-local.sh

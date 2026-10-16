@@ -233,7 +233,7 @@ missing. Use the git **clone** URL, not a browser `/src/…` URL. Extra knobs:
 In the **devcontainer**, an SSH URL needs the container's key authorized first:
 
 ```bash
-ncs-ssh-setup bitbucket.org      # ensure key -> open the host's key page -> verify
+ncs-ssh-setup github.com        # ensure key -> open the host's key page -> verify
 python3 scripts/ncs.py install custom private-sdk git@github.com:me/private-sdk-nrf.git \
         --rev main --toolchain v3.1.1
 ```
